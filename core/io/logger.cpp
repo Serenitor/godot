@@ -32,7 +32,7 @@
 
 #include "core/os/dir_access.h"
 #include "core/os/os.h"
-#include "core/print_string.h"
+#include "core/string/print_string.h"
 
 #if defined(MINGW_ENABLED) || defined(_MSC_VER)
 #define sprintf sprintf_s
@@ -152,7 +152,7 @@ void RotatedFileLogger::rotate_file() {
 			char timestamp[21];
 			OS::Date date = OS::get_singleton()->get_date();
 			OS::Time time = OS::get_singleton()->get_time();
-			sprintf(timestamp, "_%04d-%02d-%02d_%02d-%02d-%02d", date.year, date.month, date.day, time.hour, time.min, time.sec);
+			sprintf(timestamp, "_%04d-%02d-%02d_%02d.%02d.%02d", date.year, date.month, date.day, time.hour, time.min, time.sec);
 
 			String backup_name = base_path.get_basename() + timestamp;
 			if (base_path.get_extension() != String()) {

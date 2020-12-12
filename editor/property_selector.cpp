@@ -31,6 +31,7 @@
 #include "property_selector.h"
 
 #include "core/os/keyboard.h"
+#include "editor/doc_tools.h"
 #include "editor/editor_node.h"
 #include "editor_scale.h"
 
@@ -95,7 +96,7 @@ void PropertySelector::_update_search() {
 		} else if (type != Variant::NIL) {
 			Variant v;
 			Callable::CallError ce;
-			v = Variant::construct(type, nullptr, 0, ce);
+			Variant::construct(type, v, nullptr, 0, ce);
 
 			v.get_property_list(&props);
 		} else {
@@ -200,7 +201,7 @@ void PropertySelector::_update_search() {
 		if (type != Variant::NIL) {
 			Variant v;
 			Callable::CallError ce;
-			v = Variant::construct(type, nullptr, 0, ce);
+			Variant::construct(type, v, nullptr, 0, ce);
 			v.get_method_list(&methods);
 		} else {
 			Object *obj = ObjectDB::get_instance(script);
@@ -349,7 +350,7 @@ void PropertySelector::_item_selected() {
 		class_type = base_type;
 	}
 
-	DocData *dd = EditorHelp::get_doc_data();
+	DocTools *dd = EditorHelp::get_doc_data();
 	String text;
 
 	if (properties) {

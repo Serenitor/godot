@@ -59,7 +59,7 @@ GDScriptCache *gdscript_cache = nullptr;
 #include "editor/gdscript_translation_parser_plugin.h"
 
 #ifndef GDSCRIPT_NO_LSP
-#include "core/engine.h"
+#include "core/config/engine.h"
 #include "language_server/gdscript_language_server.h"
 #endif // !GDSCRIPT_NO_LSP
 
@@ -112,7 +112,6 @@ static void _editor_init() {
 
 void register_gdscript_types() {
 	ClassDB::register_class<GDScript>();
-	ClassDB::register_virtual_class<GDScriptFunctionState>();
 
 	script_language_gd = memnew(GDScriptLanguage);
 	ScriptServer::register_language(script_language_gd);

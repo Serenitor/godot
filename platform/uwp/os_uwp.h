@@ -35,11 +35,11 @@
 #include "core/input/input.h"
 #include "core/math/transform_2d.h"
 #include "core/os/os.h"
-#include "core/ustring.h"
+#include "core/string/ustring.h"
 #include "drivers/xaudio2/audio_driver_xaudio2.h"
 #include "joypad_uwp.h"
 #include "servers/audio_server.h"
-#include "servers/rendering/rasterizer.h"
+#include "servers/rendering/renderer_compositor.h"
 #include "servers/rendering_server.h"
 
 #include <fcntl.h>
@@ -55,13 +55,13 @@ public:
 			CHAR_EVENT_MESSAGE
 		};
 
-		bool alt, shift, control;
-		MessageType type;
-		bool pressed;
-		unsigned int keycode;
-		unsigned int physical_keycode;
-		unsigned int unicode;
-		bool echo;
+		bool alt = false, shift = false, control = false;
+		MessageType type = KEY_EVENT_MESSAGE;
+		bool pressed = false;
+		unsigned int keycode = 0;
+		unsigned int physical_keycode = 0;
+		unsigned int unicode = 0;
+		bool echo = false;
 		CorePhysicalKeyStatus status;
 	};
 

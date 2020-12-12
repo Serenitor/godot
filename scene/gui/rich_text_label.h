@@ -39,7 +39,6 @@ class RichTextLabel : public Control {
 
 public:
 	enum Align {
-
 		ALIGN_LEFT,
 		ALIGN_CENTER,
 		ALIGN_RIGHT,
@@ -47,14 +46,12 @@ public:
 	};
 
 	enum ListType {
-
 		LIST_NUMBERS,
 		LIST_LETTERS,
 		LIST_DOTS
 	};
 
 	enum ItemType {
-
 		ITEM_FRAME,
 		ITEM_TEXT,
 		ITEM_IMAGE,
@@ -344,7 +341,6 @@ private:
 	};
 
 	enum ProcessMode {
-
 		PROCESS_CACHE,
 		PROCESS_DRAW,
 		PROCESS_POINTER
@@ -379,7 +375,6 @@ private:
 	bool _find_strikethrough(Item *p_item);
 	bool _find_meta(Item *p_item, Variant *r_meta, ItemMeta **r_item = nullptr);
 	bool _find_layout_subitem(Item *from, Item *to);
-	bool _find_by_type(Item *p_item, ItemType p_type);
 	void _fetch_item_fx_stack(Item *p_item, Vector<ItemFX *> &r_stack);
 
 	static Color _get_color_from_string(const String &p_color_str, const Color &p_default_color);

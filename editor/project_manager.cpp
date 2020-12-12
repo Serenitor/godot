@@ -38,7 +38,7 @@
 #include "core/os/file_access.h"
 #include "core/os/keyboard.h"
 #include "core/os/os.h"
-#include "core/translation.h"
+#include "core/string/translation.h"
 #include "core/version.h"
 #include "core/version_hash.gen.h"
 #include "editor_scale.h"
@@ -61,6 +61,7 @@ class ProjectDialog : public ConfirmationDialog {
 	GDCLASS(ProjectDialog, ConfirmationDialog);
 
 public:
+	bool is_folder_empty = true;
 	enum Mode {
 		MODE_NEW,
 		MODE_IMPORT,
@@ -218,7 +219,7 @@ private:
 
 					// check if the specified install folder is empty, even though this is not an error, it is good to check here
 					d->list_dir_begin();
-					bool is_empty = true;
+					is_folder_empty = true;
 					String n = d->get_next();
 					while (n != String()) {
 						if (!n.begins_with(".")) {
@@ -226,14 +227,14 @@ private:
 							// and hidden files/folders to be present.
 							// For instance, this lets users initialize a Git repository
 							// and still be able to create a project in the directory afterwards.
-							is_empty = false;
+							is_folder_empty = false;
 							break;
 						}
 						n = d->get_next();
 					}
 					d->list_dir_end();
 
-					if (!is_empty) {
+					if (!is_folder_empty) {
 						set_message(TTR("Please choose an empty folder."), MESSAGE_WARNING, INSTALL_PATH);
 						memdelete(d);
 						get_ok()->set_disabled(true);
@@ -258,7 +259,7 @@ private:
 		} else {
 			// check if the specified folder is empty, even though this is not an error, it is good to check here
 			d->list_dir_begin();
-			bool is_empty = true;
+			is_folder_empty = true;
 			String n = d->get_next();
 			while (n != String()) {
 				if (!n.begins_with(".")) {
@@ -266,18 +267,18 @@ private:
 					// and hidden files/folders to be present.
 					// For instance, this lets users initialize a Git repository
 					// and still be able to create a project in the directory afterwards.
-					is_empty = false;
+					is_folder_empty = false;
 					break;
 				}
 				n = d->get_next();
 			}
 			d->list_dir_end();
 
-			if (!is_empty) {
-				set_message(TTR("Please choose an empty folder."), MESSAGE_ERROR);
+			if (!is_folder_empty) {
+				set_message(TTR("The selected path is not empty. Choosing an empty folder is highly recommended."), MESSAGE_WARNING);
 				memdelete(d);
-				get_ok()->set_disabled(true);
-				return "";
+				get_ok()->set_disabled(false);
+				return valid_path;
 			}
 		}
 
@@ -416,6 +417,11 @@ private:
 		}
 	}
 
+	void _nonempty_confirmation_ok_pressed() {
+		is_folder_empty = true;
+		ok_pressed();
+	}
+
 	void ok_pressed() override {
 		String dir = project_path->get_text();
 
@@ -454,6 +460,18 @@ private:
 
 			} else {
 				if (mode == MODE_NEW) {
+					// Before we create a project, check that the target folder is empty.
+					// If not, we need to ask the user if they're sure they want to do this.
+					if (!is_folder_empty) {
+						ConfirmationDialog *cd = memnew(ConfirmationDialog);
+						cd->set_title(TTR("Warning: This folder is not empty"));
+						cd->set_text(TTR("You are about to create a Godot project in a non-empty folder.\nThe entire contents of this folder will be imported as project resources!\n\nAre you sure you wish to continue?"));
+						cd->get_ok()->connect("pressed", callable_mp(this, &ProjectDialog::_nonempty_confirmation_ok_pressed));
+						get_parent()->add_child(cd);
+						cd->popup_centered();
+						cd->grab_focus();
+						return;
+					}
 					ProjectSettings::CustomMap initial_settings;
 					if (rasterizer_button_group->get_pressed_button()->get_meta("driver_name") == "Vulkan") {
 						initial_settings["rendering/quality/driver/driver_name"] = "Vulkan";
@@ -786,6 +804,7 @@ public:
 
 		project_path = memnew(LineEdit);
 		project_path->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+		project_path->set_structured_text_bidi_override(Control::STRUCTURED_TEXT_FILE);
 		pphb->add_child(project_path);
 
 		install_path_container = memnew(VBoxContainer);
@@ -800,6 +819,7 @@ public:
 
 		install_path = memnew(LineEdit);
 		install_path->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+		install_path->set_structured_text_bidi_override(Control::STRUCTURED_TEXT_FILE);
 		iphb->add_child(install_path);
 
 		// status icon
@@ -938,7 +958,7 @@ public:
 			} break;
 			case NOTIFICATION_DRAW: {
 				if (hover) {
-					draw_style_box(get_theme_stylebox("hover", "Tree"), Rect2(Point2(), get_size() - Size2(10, 0) * EDSCALE));
+					draw_style_box(get_theme_stylebox("hover", "Tree"), Rect2(Point2(), get_size()));
 				}
 			} break;
 		}
@@ -964,13 +984,13 @@ public:
 		String path;
 		String icon;
 		String main_scene;
-		uint64_t last_edited;
-		bool favorite;
-		bool grayed;
-		bool missing;
-		int version;
+		uint64_t last_edited = 0;
+		bool favorite = false;
+		bool grayed = false;
+		bool missing = false;
+		int version = 0;
 
-		ProjectListItemControl *control;
+		ProjectListItemControl *control = nullptr;
 
 		Item() {}
 
@@ -1056,7 +1076,7 @@ private:
 };
 
 struct ProjectListComparator {
-	FilterOption order_option;
+	FilterOption order_option = FilterOption::EDIT_DATE;
 
 	// operator<
 	_FORCE_INLINE_ bool operator()(const ProjectList::Item &a, const ProjectList::Item &b) const {
@@ -1349,6 +1369,7 @@ void ProjectList::create_project_item_control(int p_index) {
 	vb->add_child(ec);
 	Label *title = memnew(Label(!item.missing ? item.project_name : TTR("Missing Project")));
 	title->add_theme_font_override("font", get_theme_font("title", "EditorFonts"));
+	title->add_theme_font_size_override("font_size", get_theme_font_size("title_size", "EditorFonts"));
 	title->add_theme_color_override("font_color", font_color);
 	title->set_clip_text(true);
 	vb->add_child(title);
@@ -1375,6 +1396,7 @@ void ProjectList::create_project_item_control(int p_index) {
 	}
 
 	Label *fpath = memnew(Label(item.path));
+	fpath->set_structured_text_bidi_override(Control::STRUCTURED_TEXT_FILE);
 	path_hb->add_child(fpath);
 	fpath->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	fpath->set_modulate(Color(1, 1, 1, 0.5));
@@ -1705,12 +1727,16 @@ void ProjectList::erase_selected_projects() {
 void ProjectList::_panel_draw(Node *p_hb) {
 	Control *hb = Object::cast_to<Control>(p_hb);
 
-	hb->draw_line(Point2(0, hb->get_size().y + 1), Point2(hb->get_size().x - 10, hb->get_size().y + 1), get_theme_color("guide_color", "Tree"));
+	if (is_layout_rtl() && get_v_scrollbar()->is_visible_in_tree()) {
+		hb->draw_line(Point2(get_v_scrollbar()->get_minimum_size().x, hb->get_size().y + 1), Point2(hb->get_size().x, hb->get_size().y + 1), get_theme_color("guide_color", "Tree"));
+	} else {
+		hb->draw_line(Point2(0, hb->get_size().y + 1), Point2(hb->get_size().x, hb->get_size().y + 1), get_theme_color("guide_color", "Tree"));
+	}
 
 	String key = _projects[p_hb->get_index()].project_key;
 
 	if (_selected_project_keys.has(key)) {
-		hb->draw_style_box(get_theme_stylebox("selected", "Tree"), Rect2(Point2(), hb->get_size() - Size2(10, 0) * EDSCALE));
+		hb->draw_style_box(get_theme_stylebox("selected", "Tree"), Rect2(Point2(), hb->get_size()));
 	}
 }
 
@@ -1796,6 +1822,11 @@ void ProjectList::_bind_methods() {
 
 void ProjectManager::_notification(int p_what) {
 	switch (p_what) {
+		case NOTIFICATION_TRANSLATION_CHANGED:
+		case NOTIFICATION_LAYOUT_DIRECTION_CHANGED: {
+			settings_hb->set_anchors_and_margins_preset(Control::PRESET_TOP_RIGHT);
+			update();
+		} break;
 		case NOTIFICATION_ENTER_TREE: {
 			search_box->set_right_icon(get_theme_icon("Search", "EditorIcons"));
 			search_box->set_clear_button_enabled(true);
@@ -1823,7 +1854,7 @@ void ProjectManager::_notification(int p_what) {
 			}
 		} break;
 		case NOTIFICATION_VISIBILITY_CHANGED: {
-			set_process_unhandled_input(is_visible_in_tree());
+			set_process_unhandled_key_input(is_visible_in_tree());
 		} break;
 		case NOTIFICATION_WM_CLOSE_REQUEST: {
 			_dim_window();
@@ -1862,7 +1893,7 @@ void ProjectManager::_update_project_buttons() {
 	erase_missing_btn->set_disabled(!_project_list->is_any_project_missing());
 }
 
-void ProjectManager::_unhandled_input(const Ref<InputEvent> &p_ev) {
+void ProjectManager::_unhandled_key_input(const Ref<InputEvent> &p_ev) {
 	Ref<InputEventKey> k = p_ev;
 
 	if (k.is_valid()) {
@@ -2087,7 +2118,7 @@ void ProjectManager::_run_project_confirm() {
 		if (selected_main == "") {
 			run_error_diag->set_text(TTR("Can't run project: no main scene defined.\nPlease edit the project and set the main scene in the Project Settings under the \"Application\" category."));
 			run_error_diag->popup_centered();
-			return;
+			continue;
 		}
 
 		const String &selected = selected_list[i].project_key;
@@ -2097,7 +2128,7 @@ void ProjectManager::_run_project_confirm() {
 		if (!DirAccess::exists(path.plus_file(ProjectSettings::IMPORTED_FILES_PATH.right(6)))) {
 			run_error_diag->set_text(TTR("Can't run project: Assets need to be imported.\nPlease edit the project to trigger the initial import."));
 			run_error_diag->popup_centered();
-			return;
+			continue;
 		}
 
 		print_line("Running project: " + path + " (" + selected + ")");
@@ -2326,7 +2357,7 @@ void ProjectManager::_on_search_term_changed(const String &p_term) {
 
 void ProjectManager::_bind_methods() {
 	ClassDB::bind_method("_exit_dialog", &ProjectManager::_exit_dialog);
-	ClassDB::bind_method("_unhandled_input", &ProjectManager::_unhandled_input);
+	ClassDB::bind_method("_unhandled_key_input", &ProjectManager::_unhandled_key_input);
 	ClassDB::bind_method("_update_project_buttons", &ProjectManager::_update_project_buttons);
 }
 
@@ -2348,12 +2379,24 @@ ProjectManager::ProjectManager() {
 
 		switch (display_scale) {
 			case 0: {
-				// Try applying a suitable display scale automatically
+				// Try applying a suitable display scale automatically.
 #ifdef OSX_ENABLED
 				editor_set_scale(DisplayServer::get_singleton()->screen_get_max_scale());
 #else
 				const int screen = DisplayServer::get_singleton()->window_get_current_screen();
-				editor_set_scale(DisplayServer::get_singleton()->screen_get_dpi(screen) >= 192 && DisplayServer::get_singleton()->screen_get_size(screen).x > 2000 ? 2.0 : 1.0);
+				float scale;
+				if (DisplayServer::get_singleton()->screen_get_dpi(screen) >= 192 && DisplayServer::get_singleton()->screen_get_size(screen).y >= 1400) {
+					// hiDPI display.
+					scale = 2.0;
+				} else if (DisplayServer::get_singleton()->screen_get_size(screen).y <= 800) {
+					// Small loDPI display. Use a smaller display scale so that editor elements fit more easily.
+					// Icons won't look great, but this is better than having editor elements overflow from its window.
+					scale = 0.75;
+				} else {
+					scale = 1.0;
+				}
+
+				editor_set_scale(scale);
 #endif
 			} break;
 
@@ -2375,9 +2418,9 @@ ProjectManager::ProjectManager() {
 			case 6:
 				editor_set_scale(2.0);
 				break;
-			default: {
+			default:
 				editor_set_scale(EditorSettings::get_singleton()->get("interface/editor/custom_display_scale"));
-			} break;
+				break;
 		}
 
 		// Define a minimum window size to prevent UI elements from overlapping or being cut off
@@ -2387,10 +2430,13 @@ ProjectManager::ProjectManager() {
 		DisplayServer::get_singleton()->window_set_size(DisplayServer::get_singleton()->window_get_size() * MAX(1, EDSCALE));
 	}
 
-	String cp;
-	cp += 0xA9;
 	// TRANSLATORS: This refers to the application where users manage their Godot projects.
-	DisplayServer::get_singleton()->window_set_title(VERSION_NAME + String(" - ") + TTR("Project Manager") + " - " + cp + " 2007-2020 Juan Linietsky, Ariel Manzur & Godot Contributors");
+	if (TS->is_locale_right_to_left(TranslationServer::get_singleton()->get_tool_locale())) {
+		// For RTL languages, embed translated part of the title (using control characters) to ensure correct order.
+		DisplayServer::get_singleton()->window_set_title(VERSION_NAME + String(" - ") + String::chr(0x202B) + TTR("Project Manager") + String::chr(0x202C) + String::chr(0x200E) + " - " + String::chr(0xA9) + " 2007-2020 Juan Linietsky, Ariel Manzur & Godot Contributors");
+	} else {
+		DisplayServer::get_singleton()->window_set_title(VERSION_NAME + String(" - ") + TTR("Project Manager") + " - " + String::chr(0xA9) + " 2007-2020 Juan Linietsky, Ariel Manzur & Godot Contributors");
+	}
 
 	FileDialog::set_default_show_hidden_files(EditorSettings::get_singleton()->get("filesystem/file_dialog/show_hidden_files"));
 
@@ -2522,9 +2568,10 @@ ProjectManager::ProjectManager() {
 
 	{
 		// Version info and language options
-		HBoxContainer *settings_hb = memnew(HBoxContainer);
+		settings_hb = memnew(HBoxContainer);
 		settings_hb->set_alignment(BoxContainer::ALIGN_END);
 		settings_hb->set_h_grow_direction(Control::GROW_DIRECTION_BEGIN);
+		settings_hb->set_anchors_and_margins_preset(Control::PRESET_TOP_RIGHT);
 
 		Label *version_label = memnew(Label);
 		String hash = String(VERSION_HASH);
@@ -2568,7 +2615,6 @@ ProjectManager::ProjectManager() {
 
 		settings_hb->add_child(language_btn);
 		center_box->add_child(settings_hb);
-		settings_hb->set_anchors_and_margins_preset(Control::PRESET_TOP_RIGHT);
 	}
 
 	if (StreamPeerSSL::is_available()) {
