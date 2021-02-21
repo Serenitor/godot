@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -50,8 +50,16 @@ void FontData::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_underline_position", "size"), &FontData::get_underline_position);
 	ClassDB::bind_method(D_METHOD("get_underline_thickness", "size"), &FontData::get_underline_thickness);
 
+	ClassDB::bind_method(D_METHOD("get_spacing", "type"), &FontData::get_spacing);
+	ClassDB::bind_method(D_METHOD("set_spacing", "type", "value"), &FontData::set_spacing);
+
 	ClassDB::bind_method(D_METHOD("set_antialiased", "antialiased"), &FontData::set_antialiased);
 	ClassDB::bind_method(D_METHOD("get_antialiased"), &FontData::get_antialiased);
+
+	ClassDB::bind_method(D_METHOD("get_variation_list"), &FontData::get_variation_list);
+
+	ClassDB::bind_method(D_METHOD("set_variation", "tag", "value"), &FontData::set_variation);
+	ClassDB::bind_method(D_METHOD("get_variation", "tag"), &FontData::get_variation);
 
 	ClassDB::bind_method(D_METHOD("set_hinting", "hinting"), &FontData::set_hinting);
 	ClassDB::bind_method(D_METHOD("get_hinting"), &FontData::get_hinting);
@@ -95,6 +103,13 @@ void FontData::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "distance_field_hint"), "set_distance_field_hint", "get_distance_field_hint");
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "hinting", PROPERTY_HINT_ENUM, "None,Light,Normal"), "set_hinting", "get_hinting");
+
+	ADD_GROUP("Extra Spacing", "extra_spacing");
+	ADD_PROPERTYI(PropertyInfo(Variant::INT, "extra_spacing_glyph"), "set_spacing", "get_spacing", SPACING_GLYPH);
+	ADD_PROPERTYI(PropertyInfo(Variant::INT, "extra_spacing_space"), "set_spacing", "get_spacing", SPACING_SPACE);
+
+	BIND_ENUM_CONSTANT(SPACING_GLYPH);
+	BIND_ENUM_CONSTANT(SPACING_SPACE);
 }
 
 bool FontData::_set(const StringName &p_name, const Variant &p_value) {
@@ -113,6 +128,11 @@ bool FontData::_set(const StringName &p_name, const Variant &p_value) {
 			return false;
 		}
 		set_script_support_override(scr, p_value);
+		return true;
+	}
+	if (str.begins_with("variation/")) {
+		String name = str.get_slicec('/', 1);
+		set_variation(name, p_value);
 		return true;
 	}
 
@@ -137,6 +157,12 @@ bool FontData::_get(const StringName &p_name, Variant &r_ret) const {
 		r_ret = get_script_support_override(scr);
 		return true;
 	}
+	if (str.begins_with("variation/")) {
+		String name = str.get_slicec('/', 1);
+
+		r_ret = get_variation(name);
+		return true;
+	}
 
 	return false;
 }
@@ -153,6 +179,20 @@ void FontData::_get_property_list(List<PropertyInfo> *p_list) const {
 		p_list->push_back(PropertyInfo(Variant::BOOL, "script_support_override/" + scr_over[i], PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE));
 	}
 	p_list->push_back(PropertyInfo(Variant::NIL, "script_support_override/_new", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR));
+
+	Dictionary variations = get_variation_list();
+	for (const Variant *ftr = variations.next(nullptr); ftr != nullptr; ftr = variations.next(ftr)) {
+		Vector3i v = variations[*ftr];
+		p_list->push_back(PropertyInfo(Variant::FLOAT, "variation/" + TS->tag_to_name(*ftr), PROPERTY_HINT_RANGE, itos(v.x) + "," + itos(v.y), PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE));
+	}
+}
+
+void FontData::reset_state() {
+	if (rid != RID()) {
+		TS->free(rid);
+	}
+	base_size = 16;
+	path = String();
 }
 
 RID FontData::get_rid() const {
@@ -237,6 +277,47 @@ float FontData::get_underline_thickness(int p_size) const {
 		return 0.f;
 	}
 	return TS->font_get_underline_thickness(rid, (p_size < 0) ? base_size : p_size);
+}
+
+Dictionary FontData::get_variation_list() const {
+	if (rid == RID()) {
+		return Dictionary();
+	}
+	return TS->font_get_variation_list(rid);
+}
+
+void FontData::set_variation(const String &p_name, double p_value) {
+	ERR_FAIL_COND(rid == RID());
+	TS->font_set_variation(rid, p_name, p_value);
+	emit_changed();
+}
+
+double FontData::get_variation(const String &p_name) const {
+	if (rid == RID()) {
+		return 0;
+	}
+	return TS->font_get_variation(rid, p_name);
+}
+
+int FontData::get_spacing(int p_type) const {
+	if (rid == RID()) {
+		return 0;
+	}
+	if (p_type == SPACING_GLYPH) {
+		return TS->font_get_spacing_glyph(rid);
+	} else {
+		return TS->font_get_spacing_space(rid);
+	}
+}
+
+void FontData::set_spacing(int p_type, int p_value) {
+	ERR_FAIL_COND(rid == RID());
+	if (p_type == SPACING_GLYPH) {
+		TS->font_set_spacing_glyph(rid, p_value);
+	} else {
+		TS->font_set_spacing_space(rid, p_value);
+	}
+	emit_changed();
 }
 
 void FontData::set_antialiased(bool p_antialiased) {
@@ -467,7 +548,7 @@ void Font::_data_changed() {
 	cache_wrap.clear();
 
 	emit_changed();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 bool Font::_set(const StringName &p_name, const Variant &p_value) {
@@ -546,6 +627,14 @@ void Font::_get_property_list(List<PropertyInfo> *p_list) const {
 	p_list->push_back(PropertyInfo(Variant::OBJECT, "data/" + itos(data.size()), PROPERTY_HINT_RESOURCE_TYPE, "FontData"));
 }
 
+void Font::reset_state() {
+	spacing_top = 0;
+	spacing_bottom = 0;
+	cache.clear();
+	cache_wrap.clear();
+	data.clear();
+}
+
 void Font::add_data(const Ref<FontData> &p_data) {
 	ERR_FAIL_COND(p_data.is_null());
 	data.push_back(p_data);
@@ -558,7 +647,7 @@ void Font::add_data(const Ref<FontData> &p_data) {
 	cache_wrap.clear();
 
 	emit_changed();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 void Font::set_data(int p_idx, const Ref<FontData> &p_data) {
@@ -579,7 +668,7 @@ void Font::set_data(int p_idx, const Ref<FontData> &p_data) {
 	cache_wrap.clear();
 
 	emit_changed();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 int Font::get_data_count() const {
@@ -604,7 +693,7 @@ void Font::remove_data(int p_idx) {
 	cache_wrap.clear();
 
 	emit_changed();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 Dictionary Font::get_feature_list() const {
@@ -676,13 +765,13 @@ void Font::set_spacing(int p_type, int p_value) {
 	}
 
 	emit_changed();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 // Drawing string and string sizes, cached.
 
 Size2 Font::get_string_size(const String &p_text, int p_size) const {
-	ERR_FAIL_COND_V(data.empty(), Size2());
+	ERR_FAIL_COND_V(data.is_empty(), Size2());
 
 	uint64_t hash = p_text.hash64();
 	hash = hash_djb2_one_64(p_size, hash);
@@ -704,7 +793,7 @@ Size2 Font::get_string_size(const String &p_text, int p_size) const {
 }
 
 Size2 Font::get_multiline_string_size(const String &p_text, float p_width, int p_size, uint8_t p_flags) const {
-	ERR_FAIL_COND_V(data.empty(), Size2());
+	ERR_FAIL_COND_V(data.is_empty(), Size2());
 
 	uint64_t hash = p_text.hash64();
 	hash = hash_djb2_one_64(p_size, hash);
@@ -739,6 +828,8 @@ Size2 Font::get_multiline_string_size(const String &p_text, float p_width, int p
 }
 
 void Font::draw_string(RID p_canvas_item, const Point2 &p_pos, const String &p_text, HAlign p_align, float p_width, int p_size, const Color &p_modulate, int p_outline_size, const Color &p_outline_modulate, uint8_t p_flags) const {
+	ERR_FAIL_COND(data.is_empty());
+
 	uint64_t hash = p_text.hash64();
 	hash = hash_djb2_one_64(p_size, hash);
 
@@ -769,6 +860,8 @@ void Font::draw_string(RID p_canvas_item, const Point2 &p_pos, const String &p_t
 }
 
 void Font::draw_multiline_string(RID p_canvas_item, const Point2 &p_pos, const String &p_text, HAlign p_align, float p_width, int p_max_lines, int p_size, const Color &p_modulate, int p_outline_size, const Color &p_outline_modulate, uint8_t p_flags) const {
+	ERR_FAIL_COND(data.is_empty());
+
 	uint64_t hash = p_text.hash64();
 	hash = hash_djb2_one_64(p_size, hash);
 
@@ -909,7 +1002,7 @@ Font::~Font() {
 
 /*************************************************************************/
 
-RES ResourceFormatLoaderFont::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, bool p_no_cache) {
+RES ResourceFormatLoaderFont::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode) {
 	if (r_error) {
 		*r_error = ERR_FILE_CANT_OPEN;
 	}
@@ -927,7 +1020,7 @@ RES ResourceFormatLoaderFont::load(const String &p_path, const String &p_origina
 
 void ResourceFormatLoaderFont::get_recognized_extensions_for_type(const String &p_type, List<String> *p_extensions) const {
 #ifndef DISABLE_DEPRECATED
-	if (p_type == "DynacmicFontData") {
+	if (p_type == "DynamicFontData") {
 		p_extensions->push_back("ttf");
 		p_extensions->push_back("otf");
 		p_extensions->push_back("woff");
@@ -964,7 +1057,7 @@ String ResourceFormatLoaderFont::get_resource_type(const String &p_path) const {
 
 #ifndef DISABLE_DEPRECATED
 
-RES ResourceFormatLoaderCompatFont::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, bool p_no_cache) {
+RES ResourceFormatLoaderCompatFont::load(const String &p_path, const String &p_original_path, Error *r_error, bool p_use_sub_threads, float *r_progress, CacheMode p_cache_mode) {
 	if (r_error) {
 		*r_error = ERR_FILE_CANT_OPEN;
 	}

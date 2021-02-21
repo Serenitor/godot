@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -36,6 +36,7 @@
 #include "editor/editor_settings.h"
 #endif
 
+#include "scene/main/scene_tree.h"
 #include "scene/scene_string_names.h"
 
 void Material::set_next_pass(const Ref<Material> &p_pass) {
@@ -80,12 +81,23 @@ void Material::_validate_property(PropertyInfo &property) const {
 	}
 }
 
+void Material::inspect_native_shader_code() {
+	SceneTree *st = Object::cast_to<SceneTree>(OS::get_singleton()->get_main_loop());
+	RID shader = get_shader_rid();
+	if (st && shader.is_valid()) {
+		st->call_group("_native_shader_source_visualizer", "_inspect_shader", shader);
+	}
+}
+
 void Material::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_next_pass", "next_pass"), &Material::set_next_pass);
 	ClassDB::bind_method(D_METHOD("get_next_pass"), &Material::get_next_pass);
 
 	ClassDB::bind_method(D_METHOD("set_render_priority", "priority"), &Material::set_render_priority);
 	ClassDB::bind_method(D_METHOD("get_render_priority"), &Material::get_render_priority);
+
+	ClassDB::bind_method(D_METHOD("inspect_native_shader_code"), &Material::inspect_native_shader_code);
+	ClassDB::set_method_flags(get_class_static(), _scs_create("inspect_native_shader_code"), METHOD_FLAGS_DEFAULT | METHOD_FLAG_EDITOR);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "render_priority", PROPERTY_HINT_RANGE, itos(RENDER_PRIORITY_MIN) + "," + itos(RENDER_PRIORITY_MAX) + ",1"), "set_render_priority", "get_render_priority");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "next_pass", PROPERTY_HINT_RESOURCE_TYPE, "Material"), "set_next_pass", "get_next_pass");
@@ -180,7 +192,7 @@ Variant ShaderMaterial::property_get_revert(const String &p_name) {
 
 void ShaderMaterial::set_shader(const Ref<Shader> &p_shader) {
 	// Only connect/disconnect the signal when running in the editor.
-	// This can be a slow operation, and `_change_notify()` (which is called by `_shader_changed()`)
+	// This can be a slow operation, and `notify_property_list_changed()` (which is called by `_shader_changed()`)
 	// does nothing in non-editor builds anyway. See GH-34741 for details.
 	if (shader.is_valid() && Engine::get_singleton()->is_editor_hint()) {
 		shader->disconnect("changed", callable_mp(this, &ShaderMaterial::_shader_changed));
@@ -198,7 +210,7 @@ void ShaderMaterial::set_shader(const Ref<Shader> &p_shader) {
 	}
 
 	RS::get_singleton()->material_set_shader(_get_material(), rid);
-	_change_notify(); //properties for shader exposed
+	notify_property_list_changed(); //properties for shader exposed
 	emit_changed();
 }
 
@@ -215,7 +227,7 @@ Variant ShaderMaterial::get_shader_param(const StringName &p_param) const {
 }
 
 void ShaderMaterial::_shader_changed() {
-	_change_notify(); //update all properties
+	notify_property_list_changed(); //update all properties
 }
 
 void ShaderMaterial::_bind_methods() {
@@ -258,6 +270,13 @@ Shader::Mode ShaderMaterial::get_shader_mode() const {
 		return shader->get_mode();
 	} else {
 		return Shader::MODE_SPATIAL;
+	}
+}
+RID ShaderMaterial::get_shader_rid() const {
+	if (shader.is_valid()) {
+		return shader->get_rid();
+	} else {
+		return RID();
 	}
 }
 
@@ -716,7 +735,7 @@ void BaseMaterial3D::_update_shader() {
 
 	if (flags[FLAG_SRGB_VERTEX_COLOR]) {
 		code += "\tif (!OUTPUT_IS_SRGB) {\n";
-		code += "\t\tCOLOR.rgb = mix( pow((COLOR.rgb + vec3(0.055)) * (1.0 / (1.0 + 0.055)), vec3(2.4)), COLOR.rgb* (1.0 / 12.92), lessThan(COLOR.rgb,vec3(0.04045)) );\n";
+		code += "\t\tCOLOR.rgb = mix(pow((COLOR.rgb + vec3(0.055)) * (1.0 / (1.0 + 0.055)), vec3(2.4)), COLOR.rgb * (1.0 / 12.92), lessThan(COLOR.rgb, vec3(0.04045)));\n";
 		code += "\t}\n";
 	}
 	if (flags[FLAG_USE_POINT_SIZE]) {
@@ -969,11 +988,11 @@ void BaseMaterial3D::_update_shader() {
 
 	if (features[FEATURE_NORMAL_MAPPING]) {
 		if (flags[FLAG_UV1_USE_TRIPLANAR]) {
-			code += "\tNORMALMAP = triplanar_texture(texture_normal,uv1_power_normal,uv1_triplanar_pos).rgb;\n";
+			code += "\tNORMAL_MAP = triplanar_texture(texture_normal,uv1_power_normal,uv1_triplanar_pos).rgb;\n";
 		} else {
-			code += "\tNORMALMAP = texture(texture_normal,base_uv).rgb;\n";
+			code += "\tNORMAL_MAP = texture(texture_normal,base_uv).rgb;\n";
 		}
-		code += "\tNORMALMAP_DEPTH = normal_scale;\n";
+		code += "\tNORMAL_MAP_DEPTH = normal_scale;\n";
 	}
 
 	if (features[FEATURE_EMISSION]) {
@@ -1000,7 +1019,7 @@ void BaseMaterial3D::_update_shader() {
 
 	if (features[FEATURE_REFRACTION]) {
 		if (features[FEATURE_NORMAL_MAPPING]) {
-			code += "\tvec3 ref_normal = normalize( mix(NORMAL,TANGENT * NORMALMAP.x + BINORMAL * NORMALMAP.y + NORMAL * NORMALMAP.z,NORMALMAP_DEPTH) );\n";
+			code += "\tvec3 ref_normal = normalize( mix(NORMAL,TANGENT * NORMAL_MAP.x + BINORMAL * NORMAL_MAP.y + NORMAL * NORMAL_MAP.z,NORMAL_MAP_DEPTH) );\n";
 		} else {
 			code += "\tvec3 ref_normal = NORMAL;\n";
 		}
@@ -1198,8 +1217,8 @@ void BaseMaterial3D::_update_shader() {
 				break; // Internal value, skip.
 		}
 
-		code += "\tvec3 detail_norm = mix(NORMALMAP,detail_norm_tex.rgb,detail_tex.a);\n";
-		code += "\tNORMALMAP = mix(NORMALMAP,detail_norm,detail_mask_tex.r);\n";
+		code += "\tvec3 detail_norm = mix(NORMAL_MAP,detail_norm_tex.rgb,detail_tex.a);\n";
+		code += "\tNORMAL_MAP = mix(NORMAL_MAP,detail_norm,detail_mask_tex.r);\n";
 		code += "\tALBEDO.rgb = mix(ALBEDO.rgb,detail,detail_mask_tex.r);\n";
 	}
 
@@ -1470,7 +1489,7 @@ void BaseMaterial3D::set_transparency(Transparency p_transparency) {
 
 	transparency = p_transparency;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 BaseMaterial3D::Transparency BaseMaterial3D::get_transparency() const {
@@ -1484,7 +1503,7 @@ void BaseMaterial3D::set_alpha_antialiasing(AlphaAntiAliasing p_alpha_aa) {
 
 	alpha_antialiasing_mode = p_alpha_aa;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 BaseMaterial3D::AlphaAntiAliasing BaseMaterial3D::get_alpha_antialiasing() const {
@@ -1498,7 +1517,7 @@ void BaseMaterial3D::set_shading_mode(ShadingMode p_shading_mode) {
 
 	shading_mode = p_shading_mode;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 BaseMaterial3D::ShadingMode BaseMaterial3D::get_shading_mode() const {
@@ -1566,7 +1585,7 @@ void BaseMaterial3D::set_flag(Flags p_flag, bool p_enabled) {
 
 	flags[p_flag] = p_enabled;
 	if (p_flag == FLAG_USE_SHADOW_TO_OPACITY || p_flag == FLAG_USE_TEXTURE_REPEAT || p_flag == FLAG_SUBSURFACE_MODE_SKIN) {
-		_change_notify();
+		notify_property_list_changed();
 	}
 	_queue_shader_change();
 }
@@ -1583,7 +1602,7 @@ void BaseMaterial3D::set_feature(Feature p_feature, bool p_enabled) {
 	}
 
 	features[p_feature] = p_enabled;
-	_change_notify();
+	notify_property_list_changed();
 	_queue_shader_change();
 }
 
@@ -1601,7 +1620,7 @@ void BaseMaterial3D::set_texture(TextureParam p_param, const Ref<Texture2D> &p_t
 		RS::get_singleton()->material_set_param(_get_material(), shader_names->albedo_texture_size,
 				Vector2i(p_texture->get_width(), p_texture->get_height()));
 	}
-	_change_notify();
+	notify_property_list_changed();
 	_queue_shader_change();
 }
 
@@ -1841,7 +1860,7 @@ float BaseMaterial3D::get_uv2_triplanar_blend_sharpness() const {
 void BaseMaterial3D::set_billboard_mode(BillboardMode p_mode) {
 	billboard_mode = p_mode;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 BaseMaterial3D::BillboardMode BaseMaterial3D::get_billboard_mode() const {
@@ -1878,7 +1897,7 @@ bool BaseMaterial3D::get_particles_anim_loop() const {
 void BaseMaterial3D::set_heightmap_deep_parallax(bool p_enable) {
 	deep_parallax = p_enable;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 bool BaseMaterial3D::is_heightmap_deep_parallax_enabled() const {
@@ -1924,7 +1943,7 @@ bool BaseMaterial3D::get_heightmap_deep_parallax_flip_binormal() const {
 void BaseMaterial3D::set_grow_enabled(bool p_enable) {
 	grow_enabled = p_enable;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 bool BaseMaterial3D::is_grow_enabled() const {
@@ -2074,7 +2093,7 @@ void BaseMaterial3D::set_on_top_of_alpha() {
 void BaseMaterial3D::set_proximity_fade(bool p_enable) {
 	proximity_fade_enabled = p_enable;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 bool BaseMaterial3D::is_proximity_fade_enabled() const {
@@ -2093,7 +2112,7 @@ float BaseMaterial3D::get_proximity_fade_distance() const {
 void BaseMaterial3D::set_distance_fade(DistanceFadeMode p_mode) {
 	distance_fade = p_mode;
 	_queue_shader_change();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 BaseMaterial3D::DistanceFadeMode BaseMaterial3D::get_distance_fade() const {
@@ -2636,9 +2655,6 @@ BaseMaterial3D::BaseMaterial3D(bool p_orm) :
 		element(this) {
 	orm = p_orm;
 	// Initialize to the same values as the shader
-	shading_mode = SHADING_MODE_PER_PIXEL;
-	transparency = TRANSPARENCY_DISABLED;
-	alpha_antialiasing_mode = ALPHA_ANTIALIASING_OFF;
 	set_albedo(Color(1.0, 1.0, 1.0, 1.0));
 	set_specular(0.5);
 	set_roughness(1.0);
@@ -2670,7 +2686,6 @@ BaseMaterial3D::BaseMaterial3D(bool p_orm) :
 	set_particles_anim_h_frames(1);
 	set_particles_anim_v_frames(1);
 	set_particles_anim_loop(false);
-	emission_op = EMISSION_OP_ADD;
 
 	set_transparency(TRANSPARENCY_DISABLED);
 	set_alpha_antialiasing(ALPHA_ANTIALIASING_OFF);
@@ -2678,8 +2693,6 @@ BaseMaterial3D::BaseMaterial3D(bool p_orm) :
 	set_alpha_hash_scale(1.0);
 	set_alpha_antialiasing_edge(0.3);
 
-	proximity_fade_enabled = false;
-	distance_fade = DISTANCE_FADE_DISABLED;
 	set_proximity_fade_distance(1);
 	set_distance_fade_min_distance(0);
 	set_distance_fade_max_distance(10);
@@ -2691,34 +2704,13 @@ BaseMaterial3D::BaseMaterial3D(bool p_orm) :
 	set_ao_texture_channel(TEXTURE_CHANNEL_RED);
 	set_refraction_texture_channel(TEXTURE_CHANNEL_RED);
 
-	grow_enabled = false;
 	set_grow(0.0);
 
-	deep_parallax = false;
-	heightmap_parallax_flip_tangent = false;
-	heightmap_parallax_flip_binormal = false;
 	set_heightmap_deep_parallax_min_layers(8);
 	set_heightmap_deep_parallax_max_layers(32);
 	set_heightmap_deep_parallax_flip_tangent(false); //also sets binormal
 
-	detail_uv = DETAIL_UV_1;
-	blend_mode = BLEND_MODE_MIX;
-	detail_blend_mode = BLEND_MODE_MIX;
-	depth_draw_mode = DEPTH_DRAW_OPAQUE_ONLY;
-	cull_mode = CULL_BACK;
-	for (int i = 0; i < FLAG_MAX; i++) {
-		flags[i] = false;
-	}
 	flags[FLAG_USE_TEXTURE_REPEAT] = true;
-
-	diffuse_mode = DIFFUSE_BURLEY;
-	specular_mode = SPECULAR_SCHLICK_GGX;
-
-	for (int i = 0; i < FEATURE_MAX; i++) {
-		features[i] = false;
-	}
-
-	texture_filter = TEXTURE_FILTER_LINEAR_WITH_MIPMAPS;
 
 	_queue_shader_change();
 }

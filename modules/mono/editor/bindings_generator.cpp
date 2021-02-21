@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -97,7 +97,7 @@
 #define C_METHOD_MANAGED_TO_SIGNAL C_NS_MONOMARSHAL "::signal_info_to_callable"
 #define C_METHOD_MANAGED_FROM_SIGNAL C_NS_MONOMARSHAL "::callable_to_signal_info"
 
-#define BINDINGS_GENERATOR_VERSION UINT32_C(12)
+#define BINDINGS_GENERATOR_VERSION UINT32_C(13)
 
 const char *BindingsGenerator::TypeInterface::DEFAULT_VARARG_C_IN("\t%0 %1_in = %1;\n");
 
@@ -181,7 +181,7 @@ static String snake_to_camel_case(const String &p_identifier, bool p_input_is_up
 String BindingsGenerator::bbcode_to_xml(const String &p_bbcode, const TypeInterface *p_itype) {
 	// Based on the version in EditorHelp
 
-	if (p_bbcode.empty()) {
+	if (p_bbcode.is_empty()) {
 		return String();
 	}
 
@@ -365,7 +365,7 @@ String BindingsGenerator::bbcode_to_xml(const String &p_bbcode, const TypeInterf
 				xml_output.append("</c>");
 			} else if (link_tag == "enum") {
 				StringName search_cname = !target_itype ? target_cname :
-														  StringName(target_itype->name + "." + (String)target_cname);
+															StringName(target_itype->name + "." + (String)target_cname);
 
 				const Map<StringName, TypeInterface>::Element *enum_match = enum_types.find(search_cname);
 
@@ -644,7 +644,7 @@ String BindingsGenerator::bbcode_to_xml(const String &p_bbcode, const TypeInterf
 }
 
 int BindingsGenerator::_determine_enum_prefix(const EnumInterface &p_ienum) {
-	CRASH_COND(p_ienum.constants.empty());
+	CRASH_COND(p_ienum.constants.is_empty());
 
 	const ConstantInterface &front_iconstant = p_ienum.constants.front()->get();
 	Vector<String> front_parts = front_iconstant.name.split("_", /* p_allow_empty: */ true);
@@ -783,6 +783,72 @@ void BindingsGenerator::_generate_method_icalls(const TypeInterface &p_itype) {
 	}
 }
 
+void BindingsGenerator::_generate_array_extensions(StringBuilder &p_output) {
+	p_output.append("using System;\n\n");
+	p_output.append("namespace " BINDINGS_NAMESPACE "\n" OPEN_BLOCK);
+	// The class where we put the extensions doesn't matter, so just use "GD".
+	p_output.append(INDENT1 "public static partial class " BINDINGS_GLOBAL_SCOPE_CLASS "\n" INDENT1 "{");
+
+#define ARRAY_IS_EMPTY(m_type)                                                                          \
+	p_output.append("\n" INDENT2 "/// <summary>\n");                                                    \
+	p_output.append(INDENT2 "/// Returns true if this " #m_type " array is empty or doesn't exist.\n"); \
+	p_output.append(INDENT2 "/// </summary>\n");                                                        \
+	p_output.append(INDENT2 "/// <param name=\"instance\">The " #m_type " array check.</param>\n");     \
+	p_output.append(INDENT2 "/// <returns>Whether or not the array is empty.</returns>\n");             \
+	p_output.append(INDENT2 "public static bool IsEmpty(this " #m_type "[] instance)\n");               \
+	p_output.append(INDENT2 OPEN_BLOCK);                                                                \
+	p_output.append(INDENT3 "return instance == null || instance.Length == 0;\n");                      \
+	p_output.append(INDENT2 CLOSE_BLOCK);
+
+#define ARRAY_JOIN(m_type)                                                                                          \
+	p_output.append("\n" INDENT2 "/// <summary>\n");                                                                \
+	p_output.append(INDENT2 "/// Converts this " #m_type " array to a string delimited by the given string.\n");    \
+	p_output.append(INDENT2 "/// </summary>\n");                                                                    \
+	p_output.append(INDENT2 "/// <param name=\"instance\">The " #m_type " array to convert.</param>\n");            \
+	p_output.append(INDENT2 "/// <param name=\"delimiter\">The delimiter to use between items.</param>\n");         \
+	p_output.append(INDENT2 "/// <returns>A single string with all items.</returns>\n");                            \
+	p_output.append(INDENT2 "public static string Join(this " #m_type "[] instance, string delimiter = \", \")\n"); \
+	p_output.append(INDENT2 OPEN_BLOCK);                                                                            \
+	p_output.append(INDENT3 "return String.Join(delimiter, instance);\n");                                          \
+	p_output.append(INDENT2 CLOSE_BLOCK);
+
+#define ARRAY_STRINGIFY(m_type)                                                                          \
+	p_output.append("\n" INDENT2 "/// <summary>\n");                                                     \
+	p_output.append(INDENT2 "/// Converts this " #m_type " array to a string with brackets.\n");         \
+	p_output.append(INDENT2 "/// </summary>\n");                                                         \
+	p_output.append(INDENT2 "/// <param name=\"instance\">The " #m_type " array to convert.</param>\n"); \
+	p_output.append(INDENT2 "/// <returns>A single string with all items.</returns>\n");                 \
+	p_output.append(INDENT2 "public static string Stringify(this " #m_type "[] instance)\n");            \
+	p_output.append(INDENT2 OPEN_BLOCK);                                                                 \
+	p_output.append(INDENT3 "return \"[\" + instance.Join() + \"]\";\n");                                \
+	p_output.append(INDENT2 CLOSE_BLOCK);
+
+#define ARRAY_ALL(m_type)  \
+	ARRAY_IS_EMPTY(m_type) \
+	ARRAY_JOIN(m_type)     \
+	ARRAY_STRINGIFY(m_type)
+
+	ARRAY_ALL(byte);
+	ARRAY_ALL(int);
+	ARRAY_ALL(long);
+	ARRAY_ALL(float);
+	ARRAY_ALL(double);
+	ARRAY_ALL(string);
+	ARRAY_ALL(Color);
+	ARRAY_ALL(Vector2);
+	ARRAY_ALL(Vector2i);
+	ARRAY_ALL(Vector3);
+	ARRAY_ALL(Vector3i);
+
+#undef ARRAY_ALL
+#undef ARRAY_IS_EMPTY
+#undef ARRAY_JOIN
+#undef ARRAY_STRINGIFY
+
+	p_output.append(INDENT1 CLOSE_BLOCK); // End of GD class.
+	p_output.append(CLOSE_BLOCK); // End of namespace.
+}
+
 void BindingsGenerator::_generate_global_constants(StringBuilder &p_output) {
 	// Constants (in partial GD class)
 
@@ -819,7 +885,7 @@ void BindingsGenerator::_generate_global_constants(StringBuilder &p_output) {
 		p_output.append(";");
 	}
 
-	if (!global_constants.empty()) {
+	if (!global_constants.is_empty()) {
 		p_output.append("\n");
 	}
 
@@ -830,7 +896,7 @@ void BindingsGenerator::_generate_global_constants(StringBuilder &p_output) {
 	for (List<EnumInterface>::Element *E = global_enums.front(); E; E = E->next()) {
 		const EnumInterface &ienum = E->get();
 
-		CRASH_COND(ienum.constants.empty());
+		CRASH_COND(ienum.constants.is_empty());
 
 		String enum_proxy_name = ienum.cname.operator String();
 
@@ -919,6 +985,19 @@ Error BindingsGenerator::generate_cs_core_project(const String &p_proj_dir) {
 		_generate_global_constants(constants_source);
 		String output_file = path::join(base_gen_dir, BINDINGS_GLOBAL_SCOPE_CLASS "_constants.cs");
 		Error save_err = _save_file(output_file, constants_source);
+		if (save_err != OK) {
+			return save_err;
+		}
+
+		compile_items.push_back(output_file);
+	}
+
+	// Generate source file for array extensions
+	{
+		StringBuilder extensions_source;
+		_generate_array_extensions(extensions_source);
+		String output_file = path::join(base_gen_dir, BINDINGS_GLOBAL_SCOPE_CLASS "_extensions.cs");
+		Error save_err = _save_file(output_file, extensions_source);
 		if (save_err != OK) {
 			return save_err;
 		}
@@ -1283,7 +1362,7 @@ Error BindingsGenerator::_generate_cs_type(const TypeInterface &itype, const Str
 	for (const List<EnumInterface>::Element *E = itype.enums.front(); E; E = E->next()) {
 		const EnumInterface &ienum = E->get();
 
-		ERR_FAIL_COND_V(ienum.constants.empty(), ERR_BUG);
+		ERR_FAIL_COND_V(ienum.constants.is_empty(), ERR_BUG);
 
 		output.append(MEMBER_BEGIN "public enum ");
 		output.append(ienum.cname.operator String());
@@ -1479,6 +1558,12 @@ Error BindingsGenerator::_generate_cs_property(const BindingsGenerator::TypeInte
 	ERR_FAIL_COND_V_MSG(prop_itype->is_singleton, ERR_BUG,
 			"Property type is a singleton: '" + p_itype.name + "." + String(p_iprop.cname) + "'.");
 
+	if (p_itype.api_type == ClassDB::API_CORE) {
+		ERR_FAIL_COND_V_MSG(prop_itype->api_type == ClassDB::API_EDITOR, ERR_BUG,
+				"Property '" + p_itype.name + "." + String(p_iprop.cname) + "' has type '" + prop_itype->name +
+						"' from the editor API. Core API cannot have dependencies on the editor API.");
+	}
+
 	if (p_iprop.prop_doc && p_iprop.prop_doc->description.size()) {
 		String xml_summary = bbcode_to_xml(fix_doc_description(p_iprop.prop_doc->description), &p_itype);
 		Vector<String> summary_lines = xml_summary.length() ? xml_summary.split("\n") : Vector<String>();
@@ -1575,6 +1660,12 @@ Error BindingsGenerator::_generate_cs_method(const BindingsGenerator::TypeInterf
 	ERR_FAIL_COND_V_MSG(return_type->is_singleton, ERR_BUG,
 			"Method return type is a singleton: '" + p_itype.name + "." + p_imethod.name + "'.");
 
+	if (p_itype.api_type == ClassDB::API_CORE) {
+		ERR_FAIL_COND_V_MSG(return_type->api_type == ClassDB::API_EDITOR, ERR_BUG,
+				"Method '" + p_itype.name + "." + p_imethod.name + "' has return type '" + return_type->name +
+						"' from the editor API. Core API cannot have dependencies on the editor API.");
+	}
+
 	String method_bind_field = "__method_bind_" + itos(p_method_bind_count);
 
 	String arguments_sig;
@@ -1592,6 +1683,12 @@ Error BindingsGenerator::_generate_cs_method(const BindingsGenerator::TypeInterf
 
 		ERR_FAIL_COND_V_MSG(arg_type->is_singleton, ERR_BUG,
 				"Argument type is a singleton: '" + iarg.name + "' of method '" + p_itype.name + "." + p_imethod.name + "'.");
+
+		if (p_itype.api_type == ClassDB::API_CORE) {
+			ERR_FAIL_COND_V_MSG(arg_type->api_type == ClassDB::API_EDITOR, ERR_BUG,
+					"Argument '" + iarg.name + "' of method '" + p_itype.name + "." + p_imethod.name + "' has type '" +
+							arg_type->name + "' from the editor API. Core API cannot have dependencies on the editor API.");
+		}
 
 		if (iarg.default_argument.size()) {
 			CRASH_COND_MSG(!_arg_default_value_is_assignable_to_type(iarg.def_param_value, *arg_type),
@@ -1661,14 +1758,14 @@ Error BindingsGenerator::_generate_cs_method(const BindingsGenerator::TypeInterf
 			cs_in_statements += def_arg;
 			cs_in_statements += ";\n" INDENT3;
 
-			icall_params += arg_type->cs_in.empty() ? arg_in : sformat(arg_type->cs_in, arg_in);
+			icall_params += arg_type->cs_in.is_empty() ? arg_in : sformat(arg_type->cs_in, arg_in);
 
 			// Apparently the name attribute must not include the @
 			String param_tag_name = iarg.name.begins_with("@") ? iarg.name.substr(1, iarg.name.length()) : iarg.name;
 
 			default_args_doc.append(MEMBER_BEGIN "/// <param name=\"" + param_tag_name + "\">If the parameter is null, then the default value is " + def_arg + "</param>");
 		} else {
-			icall_params += arg_type->cs_in.empty() ? iarg.name : sformat(arg_type->cs_in, iarg.name);
+			icall_params += arg_type->cs_in.is_empty() ? iarg.name : sformat(arg_type->cs_in, iarg.name);
 		}
 	}
 
@@ -1714,7 +1811,7 @@ Error BindingsGenerator::_generate_cs_method(const BindingsGenerator::TypeInterf
 		}
 
 		if (p_imethod.is_deprecated) {
-			if (p_imethod.deprecation_message.empty()) {
+			if (p_imethod.deprecation_message.is_empty()) {
 				WARN_PRINT("An empty deprecation message is discouraged. Method: '" + p_imethod.proxy_name + "'.");
 			}
 
@@ -1782,7 +1879,7 @@ Error BindingsGenerator::_generate_cs_method(const BindingsGenerator::TypeInterf
 
 		if (return_type->cname == name_cache.type_void) {
 			p_output.append(im_call + "(" + icall_params + ");\n");
-		} else if (return_type->cs_out.empty()) {
+		} else if (return_type->cs_out.is_empty()) {
 			p_output.append("return " + im_call + "(" + icall_params + ");\n");
 		} else {
 			p_output.append(sformat(return_type->cs_out, im_call, icall_params, return_type->cs_type, return_type->im_type_out));
@@ -1806,7 +1903,13 @@ Error BindingsGenerator::_generate_cs_signal(const BindingsGenerator::TypeInterf
 		const TypeInterface *arg_type = _get_type_or_placeholder(iarg.type);
 
 		ERR_FAIL_COND_V_MSG(arg_type->is_singleton, ERR_BUG,
-				"Argument type is a singleton: '" + iarg.name + "' of signal" + p_itype.name + "." + p_isignal.name + "'.");
+				"Argument type is a singleton: '" + iarg.name + "' of signal '" + p_itype.name + "." + p_isignal.name + "'.");
+
+		if (p_itype.api_type == ClassDB::API_CORE) {
+			ERR_FAIL_COND_V_MSG(arg_type->api_type == ClassDB::API_EDITOR, ERR_BUG,
+					"Argument '" + iarg.name + "' of signal '" + p_itype.name + "." + p_isignal.name + "' has type '" +
+							arg_type->name + "' from the editor API. Core API cannot have dependencies on the editor API.");
+		}
 
 		// Add the current arguments to the signature
 
@@ -1839,7 +1942,7 @@ Error BindingsGenerator::_generate_cs_signal(const BindingsGenerator::TypeInterf
 		}
 
 		if (p_isignal.is_deprecated) {
-			if (p_isignal.deprecation_message.empty()) {
+			if (p_isignal.deprecation_message.is_empty()) {
 				WARN_PRINT("An empty deprecation message is discouraged. Signal: '" + p_isignal.proxy_name + "'.");
 			}
 
@@ -1999,12 +2102,12 @@ Error BindingsGenerator::generate_glue(const String &p_output_dir) {
 
 #define ADD_INTERNAL_CALL_REGISTRATION(m_icall)                                                              \
 	{                                                                                                        \
-		output.append("\tmono_add_internal_call(");                                                          \
+		output.append("\tGDMonoUtils::add_internal_call(");                                                  \
 		output.append("\"" BINDINGS_NAMESPACE ".");                                                          \
 		output.append(m_icall.editor_only ? BINDINGS_CLASS_NATIVECALLS_EDITOR : BINDINGS_CLASS_NATIVECALLS); \
 		output.append("::");                                                                                 \
 		output.append(m_icall.name);                                                                         \
-		output.append("\", (void*)");                                                                        \
+		output.append("\", ");                                                                               \
 		output.append(m_icall.name);                                                                         \
 		output.append(");\n");                                                                               \
 	}
@@ -2263,7 +2366,7 @@ Error BindingsGenerator::_generate_glue_method(const BindingsGenerator::TypeInte
 		}
 
 		if (!ret_void) {
-			if (return_type->c_out.empty()) {
+			if (return_type->c_out.is_empty()) {
 				p_output.append("\treturn " C_LOCAL_RET ";\n");
 			} else if (return_type->ret_as_byref_arg) {
 				p_output.append(sformat(return_type->c_out, return_type->c_type_out, C_LOCAL_RET, return_type->name, "arg_ret"));
@@ -2585,7 +2688,7 @@ bool BindingsGenerator::_populate_object_type_interfaces() {
 
 			int argc = method_info.arguments.size();
 
-			if (method_info.name.empty()) {
+			if (method_info.name.is_empty()) {
 				continue;
 			}
 
@@ -3100,44 +3203,11 @@ void BindingsGenerator::_populate_builtin_type_interfaces() {
 		INSERT_INT_TYPE("sbyte", int8_t, int64_t);
 		INSERT_INT_TYPE("short", int16_t, int64_t);
 		INSERT_INT_TYPE("int", int32_t, int64_t);
+		INSERT_INT_TYPE("long", int64_t, int64_t);
 		INSERT_INT_TYPE("byte", uint8_t, int64_t);
 		INSERT_INT_TYPE("ushort", uint16_t, int64_t);
 		INSERT_INT_TYPE("uint", uint32_t, int64_t);
-
-		itype = TypeInterface::create_value_type(String("long"));
-		{
-			itype.c_out = "\treturn (%0)%1;\n";
-			itype.c_in = "\t%0 %1_in = (%0)*%1;\n";
-			itype.c_out = "\t*%3 = (%0)%1;\n";
-			itype.c_type = "int64_t";
-			itype.c_arg_in = "&%s_in";
-		}
-		itype.c_type_in = "int64_t*";
-		itype.c_type_out = "int64_t";
-		itype.im_type_in = "ref " + itype.name;
-		itype.im_type_out = "out " + itype.name;
-		itype.cs_in = "ref %0";
-		/* in cs_out, im_type_out (%3) includes the 'out ' part */
-		itype.cs_out = "%0(%1, %3 argRet); return argRet;";
-		itype.ret_as_byref_arg = true;
-		builtin_types.insert(itype.cname, itype);
-
-		itype = TypeInterface::create_value_type(String("ulong"));
-		{
-			itype.c_in = "\t%0 %1_in = (%0)*%1;\n";
-			itype.c_out = "\t*%3 = (%0)%1;\n";
-			itype.c_type = "int64_t";
-			itype.c_arg_in = "&%s_in";
-		}
-		itype.c_type_in = "uint64_t*";
-		itype.c_type_out = "uint64_t";
-		itype.im_type_in = "ref " + itype.name;
-		itype.im_type_out = "out " + itype.name;
-		itype.cs_in = "ref %0";
-		/* in cs_out, im_type_out (%3) includes the 'out ' part */
-		itype.cs_out = "%0(%1, %3 argRet); return argRet;";
-		itype.ret_as_byref_arg = true;
-		builtin_types.insert(itype.cname, itype);
+		INSERT_INT_TYPE("ulong", uint64_t, int64_t);
 	}
 
 	// Floating point types
@@ -3149,20 +3219,16 @@ void BindingsGenerator::_populate_builtin_type_interfaces() {
 		itype.proxy_name = "float";
 		{
 			// The expected type for 'float' in ptrcall is 'double'
-			itype.c_in = "\t%0 %1_in = (%0)*%1;\n";
-			itype.c_out = "\t*%3 = (%0)%1;\n";
+			itype.c_in = "\t%0 %1_in = (%0)%1;\n";
+			itype.c_out = "\treturn (%0)%1;\n";
 			itype.c_type = "double";
-			itype.c_type_in = "float*";
+			itype.c_type_in = "float";
 			itype.c_type_out = "float";
 			itype.c_arg_in = "&%s_in";
 		}
 		itype.cs_type = itype.proxy_name;
-		itype.im_type_in = "ref " + itype.proxy_name;
-		itype.im_type_out = "out " + itype.proxy_name;
-		itype.cs_in = "ref %0";
-		/* in cs_out, im_type_out (%3) includes the 'out ' part */
-		itype.cs_out = "%0(%1, %3 argRet); return argRet;";
-		itype.ret_as_byref_arg = true;
+		itype.im_type_in = itype.proxy_name;
+		itype.im_type_out = itype.proxy_name;
 		builtin_types.insert(itype.cname, itype);
 
 		// double
@@ -3171,20 +3237,14 @@ void BindingsGenerator::_populate_builtin_type_interfaces() {
 		itype.cname = itype.name;
 		itype.proxy_name = "double";
 		{
-			itype.c_in = "\t%0 %1_in = (%0)*%1;\n";
-			itype.c_out = "\t*%3 = (%0)%1;\n";
 			itype.c_type = "double";
-			itype.c_type_in = "double*";
+			itype.c_type_in = "double";
 			itype.c_type_out = "double";
-			itype.c_arg_in = "&%s_in";
+			itype.c_arg_in = "&%s";
 		}
 		itype.cs_type = itype.proxy_name;
-		itype.im_type_in = "ref " + itype.proxy_name;
-		itype.im_type_out = "out " + itype.proxy_name;
-		itype.cs_in = "ref %0";
-		/* in cs_out, im_type_out (%3) includes the 'out ' part */
-		itype.cs_out = "%0(%1, %3 argRet); return argRet;";
-		itype.ret_as_byref_arg = true;
+		itype.im_type_in = itype.proxy_name;
+		itype.im_type_out = itype.proxy_name;
 		builtin_types.insert(itype.cname, itype);
 	}
 

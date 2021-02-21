@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -339,24 +339,10 @@ void SpriteBase3D::_bind_methods() {
 }
 
 SpriteBase3D::SpriteBase3D() {
-	color_dirty = true;
-	centered = true;
-	hflip = false;
-	vflip = false;
-	parent_sprite = nullptr;
-	pI = nullptr;
-
 	for (int i = 0; i < FLAG_MAX; i++) {
 		flags[i] = i == FLAG_TRANSPARENT || i == FLAG_DOUBLE_SIDED;
 	}
 
-	alpha_cut = ALPHA_CUT_DISABLED;
-	billboard_mode = StandardMaterial3D::BILLBOARD_DISABLED;
-	axis = Vector3::AXIS_Z;
-	pixel_size = 0.01;
-	modulate = Color(1, 1, 1, 1);
-	pending_update = false;
-	opacity = 1.0;
 	immediate = RenderingServer::get_singleton()->immediate_create();
 	set_base(immediate);
 }
@@ -557,8 +543,6 @@ void Sprite3D::set_frame(int p_frame) {
 
 	_queue_update();
 
-	_change_notify("frame");
-	_change_notify("frame_coords");
 	emit_signal(SceneStringNames::get_singleton()->frame_changed);
 }
 
@@ -581,7 +565,7 @@ void Sprite3D::set_vframes(int p_amount) {
 	ERR_FAIL_COND(p_amount < 1);
 	vframes = p_amount;
 	_queue_update();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 int Sprite3D::get_vframes() const {
@@ -592,7 +576,7 @@ void Sprite3D::set_hframes(int p_amount) {
 	ERR_FAIL_COND(p_amount < 1);
 	hframes = p_amount;
 	_queue_update();
-	_change_notify();
+	notify_property_list_changed();
 }
 
 int Sprite3D::get_hframes() const {
@@ -904,12 +888,13 @@ void AnimatedSprite3D::_notification(int p_what) {
 						} else {
 							frame = fc - 1;
 						}
+						emit_signal(SceneStringNames::get_singleton()->animation_finished);
 					} else {
 						frame++;
 					}
 
 					_queue_update();
-					_change_notify("frame");
+					emit_signal(SceneStringNames::get_singleton()->frame_changed);
 				}
 
 				float to_process = MIN(timeout, remaining);
@@ -935,7 +920,7 @@ void AnimatedSprite3D::set_sprite_frames(const Ref<SpriteFrames> &p_frames) {
 		set_frame(frame);
 	}
 
-	_change_notify();
+	notify_property_list_changed();
 	_reset_timeout();
 	_queue_update();
 	update_configuration_warning();
@@ -968,7 +953,7 @@ void AnimatedSprite3D::set_frame(int p_frame) {
 	frame = p_frame;
 	_reset_timeout();
 	_queue_update();
-	_change_notify("frame");
+
 	emit_signal(SceneStringNames::get_singleton()->frame_changed);
 }
 
@@ -1004,8 +989,6 @@ Rect2 AnimatedSprite3D::get_item_rect() const {
 
 void AnimatedSprite3D::_res_changed() {
 	set_frame(frame);
-	_change_notify("frame");
-	_change_notify("animation");
 	_queue_update();
 }
 
@@ -1062,7 +1045,7 @@ void AnimatedSprite3D::set_animation(const StringName &p_animation) {
 	animation = p_animation;
 	_reset_timeout();
 	set_frame(0);
-	_change_notify();
+	notify_property_list_changed();
 	_queue_update();
 }
 
@@ -1074,7 +1057,7 @@ String AnimatedSprite3D::get_configuration_warning() const {
 	String warning = SpriteBase3D::get_configuration_warning();
 
 	if (frames.is_null()) {
-		if (!warning.empty()) {
+		if (!warning.is_empty()) {
 			warning += "\n\n";
 		}
 		warning += TTR("A SpriteFrames resource must be created or set in the \"Frames\" property in order for AnimatedSprite3D to display frames.");
@@ -1101,6 +1084,7 @@ void AnimatedSprite3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_frame"), &AnimatedSprite3D::get_frame);
 
 	ADD_SIGNAL(MethodInfo("frame_changed"));
+	ADD_SIGNAL(MethodInfo("animation_finished"));
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "frames", PROPERTY_HINT_RESOURCE_TYPE, "SpriteFrames"), "set_sprite_frames", "get_sprite_frames");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "animation"), "set_animation", "get_animation");
@@ -1109,8 +1093,4 @@ void AnimatedSprite3D::_bind_methods() {
 }
 
 AnimatedSprite3D::AnimatedSprite3D() {
-	frame = 0;
-	playing = false;
-	animation = "default";
-	timeout = 0;
 }

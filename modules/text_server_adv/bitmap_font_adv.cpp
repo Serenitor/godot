@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -36,7 +36,7 @@
 
 struct hb_bmp_font_t {
 	BitmapFontDataAdvanced *face = nullptr;
-	float font_size = 0;
+	float font_size = 0.0;
 	bool unref = false; /* Whether to destroy bm_face when done. */
 };
 
@@ -340,7 +340,7 @@ Error BitmapFontDataAdvanced::load_from_file(const String &p_filename, int p_bas
 			char_map[idx] = c;
 		} else if (type == "kerning") {
 			KerningPairKey kpk;
-			float k = 0;
+			float k = 0.0;
 			if (keys.has("first")) {
 				kpk.A = keys["first"].to_int();
 			}
@@ -540,7 +540,7 @@ Vector2 BitmapFontDataAdvanced::draw_glyph(RID p_canvas, int p_size, const Vecto
 	ERR_FAIL_COND_V(c == nullptr, Vector2());
 	ERR_FAIL_COND_V(c->texture_idx < -1 || c->texture_idx >= textures.size(), Vector2());
 	if (c->texture_idx != -1) {
-		Point2 cpos = p_pos;
+		Point2i cpos = p_pos;
 		cpos += c->align * (float(p_size) / float(base_size));
 		cpos.y -= ascent * (float(p_size) / float(base_size));
 		if (RenderingServer::get_singleton() != nullptr) {

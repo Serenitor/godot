@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -51,6 +51,21 @@ Vector<String> Theme::_get_icon_list(const String &p_node_type) const {
 	return ilret;
 }
 
+Vector<String> Theme::_get_icon_type_list() const {
+	Vector<String> ilret;
+	List<StringName> il;
+
+	get_icon_type_list(&il);
+	ilret.resize(il.size());
+
+	int i = 0;
+	String *w = ilret.ptrw();
+	for (List<StringName>::Element *E = il.front(); E; E = E->next(), i++) {
+		w[i] = E->get();
+	}
+	return ilret;
+}
+
 Vector<String> Theme::_get_stylebox_list(const String &p_node_type) const {
 	Vector<String> ilret;
 	List<StringName> il;
@@ -66,11 +81,11 @@ Vector<String> Theme::_get_stylebox_list(const String &p_node_type) const {
 	return ilret;
 }
 
-Vector<String> Theme::_get_stylebox_types() const {
+Vector<String> Theme::_get_stylebox_type_list() const {
 	Vector<String> ilret;
 	List<StringName> il;
 
-	get_stylebox_types(&il);
+	get_stylebox_type_list(&il);
 	ilret.resize(il.size());
 
 	int i = 0;
@@ -86,6 +101,21 @@ Vector<String> Theme::_get_font_list(const String &p_node_type) const {
 	List<StringName> il;
 
 	get_font_list(p_node_type, &il);
+	ilret.resize(il.size());
+
+	int i = 0;
+	String *w = ilret.ptrw();
+	for (List<StringName>::Element *E = il.front(); E; E = E->next(), i++) {
+		w[i] = E->get();
+	}
+	return ilret;
+}
+
+Vector<String> Theme::_get_font_type_list() const {
+	Vector<String> ilret;
+	List<StringName> il;
+
+	get_font_type_list(&il);
 	ilret.resize(il.size());
 
 	int i = 0;
@@ -126,6 +156,21 @@ Vector<String> Theme::_get_color_list(const String &p_node_type) const {
 	return ilret;
 }
 
+Vector<String> Theme::_get_color_type_list() const {
+	Vector<String> ilret;
+	List<StringName> il;
+
+	get_color_type_list(&il);
+	ilret.resize(il.size());
+
+	int i = 0;
+	String *w = ilret.ptrw();
+	for (List<StringName>::Element *E = il.front(); E; E = E->next(), i++) {
+		w[i] = E->get();
+	}
+	return ilret;
+}
+
 Vector<String> Theme::_get_constant_list(const String &p_node_type) const {
 	Vector<String> ilret;
 	List<StringName> il;
@@ -141,7 +186,22 @@ Vector<String> Theme::_get_constant_list(const String &p_node_type) const {
 	return ilret;
 }
 
-Vector<String> Theme::_get_type_list(const String &p_node_type) const {
+Vector<String> Theme::_get_constant_type_list() const {
+	Vector<String> ilret;
+	List<StringName> il;
+
+	get_constant_type_list(&il);
+	ilret.resize(il.size());
+
+	int i = 0;
+	String *w = ilret.ptrw();
+	for (List<StringName>::Element *E = il.front(); E; E = E->next(), i++) {
+		w[i] = E->get();
+	}
+	return ilret;
+}
+
+Vector<String> Theme::_get_type_list() const {
 	Vector<String> ilret;
 	List<StringName> il;
 
@@ -298,7 +358,7 @@ void Theme::set_default_theme_font(const Ref<Font> &p_default_font) {
 		default_theme_font->connect("changed", callable_mp(this, &Theme::_emit_theme_changed), varray(), CONNECT_REFERENCE_COUNTED);
 	}
 
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -313,7 +373,7 @@ void Theme::set_default_theme_font_size(int p_font_size) {
 
 	default_theme_font_size = p_font_size;
 
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -376,7 +436,7 @@ void Theme::set_icon(const StringName &p_name, const StringName &p_node_type, co
 	}
 
 	if (new_value) {
-		_change_notify();
+		notify_property_list_changed();
 		emit_changed();
 	}
 }
@@ -403,7 +463,7 @@ void Theme::clear_icon(const StringName &p_name, const StringName &p_node_type) 
 
 	icon_map[p_node_type].erase(p_name);
 
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -417,6 +477,15 @@ void Theme::get_icon_list(StringName p_node_type, List<StringName> *p_list) cons
 	const StringName *key = nullptr;
 
 	while ((key = icon_map[p_node_type].next(key))) {
+		p_list->push_back(*key);
+	}
+}
+
+void Theme::get_icon_type_list(List<StringName> *p_list) const {
+	ERR_FAIL_NULL(p_list);
+
+	const StringName *key = nullptr;
+	while ((key = icon_map.next(key))) {
 		p_list->push_back(*key);
 	}
 }
@@ -437,7 +506,7 @@ void Theme::set_stylebox(const StringName &p_name, const StringName &p_node_type
 	}
 
 	if (new_value) {
-		_change_notify();
+		notify_property_list_changed();
 	}
 	emit_changed();
 }
@@ -464,7 +533,7 @@ void Theme::clear_stylebox(const StringName &p_name, const StringName &p_node_ty
 
 	style_map[p_node_type].erase(p_name);
 
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -482,7 +551,7 @@ void Theme::get_stylebox_list(StringName p_node_type, List<StringName> *p_list) 
 	}
 }
 
-void Theme::get_stylebox_types(List<StringName> *p_list) const {
+void Theme::get_stylebox_type_list(List<StringName> *p_list) const {
 	ERR_FAIL_NULL(p_list);
 
 	const StringName *key = nullptr;
@@ -507,7 +576,7 @@ void Theme::set_font(const StringName &p_name, const StringName &p_node_type, co
 	}
 
 	if (new_value) {
-		_change_notify();
+		notify_property_list_changed();
 		emit_changed();
 	}
 }
@@ -535,7 +604,7 @@ void Theme::clear_font(const StringName &p_name, const StringName &p_node_type) 
 	}
 
 	font_map[p_node_type].erase(p_name);
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -553,13 +622,22 @@ void Theme::get_font_list(StringName p_node_type, List<StringName> *p_list) cons
 	}
 }
 
+void Theme::get_font_type_list(List<StringName> *p_list) const {
+	ERR_FAIL_NULL(p_list);
+
+	const StringName *key = nullptr;
+	while ((key = font_map.next(key))) {
+		p_list->push_back(*key);
+	}
+}
+
 void Theme::set_font_size(const StringName &p_name, const StringName &p_node_type, int p_font_size) {
 	bool new_value = !font_size_map.has(p_node_type) || !font_size_map[p_node_type].has(p_name);
 
 	font_size_map[p_node_type][p_name] = p_font_size;
 
 	if (new_value) {
-		_change_notify();
+		notify_property_list_changed();
 		emit_changed();
 	}
 }
@@ -583,7 +661,7 @@ void Theme::clear_font_size(const StringName &p_name, const StringName &p_node_t
 	ERR_FAIL_COND(!font_size_map[p_node_type].has(p_name));
 
 	font_size_map[p_node_type].erase(p_name);
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -607,7 +685,7 @@ void Theme::set_color(const StringName &p_name, const StringName &p_node_type, c
 	color_map[p_node_type][p_name] = p_color;
 
 	if (new_value) {
-		_change_notify();
+		notify_property_list_changed();
 		emit_changed();
 	}
 }
@@ -629,7 +707,7 @@ void Theme::clear_color(const StringName &p_name, const StringName &p_node_type)
 	ERR_FAIL_COND(!color_map[p_node_type].has(p_name));
 
 	color_map[p_node_type].erase(p_name);
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -647,12 +725,21 @@ void Theme::get_color_list(StringName p_node_type, List<StringName> *p_list) con
 	}
 }
 
+void Theme::get_color_type_list(List<StringName> *p_list) const {
+	ERR_FAIL_NULL(p_list);
+
+	const StringName *key = nullptr;
+	while ((key = color_map.next(key))) {
+		p_list->push_back(*key);
+	}
+}
+
 void Theme::set_constant(const StringName &p_name, const StringName &p_node_type, int p_constant) {
 	bool new_value = !constant_map.has(p_node_type) || !constant_map[p_node_type].has(p_name);
 	constant_map[p_node_type][p_name] = p_constant;
 
 	if (new_value) {
-		_change_notify();
+		notify_property_list_changed();
 		emit_changed();
 	}
 }
@@ -674,7 +761,7 @@ void Theme::clear_constant(const StringName &p_name, const StringName &p_node_ty
 	ERR_FAIL_COND(!constant_map[p_node_type].has(p_name));
 
 	constant_map[p_node_type].erase(p_name);
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -688,6 +775,15 @@ void Theme::get_constant_list(StringName p_node_type, List<StringName> *p_list) 
 	const StringName *key = nullptr;
 
 	while ((key = constant_map[p_node_type].next(key))) {
+		p_list->push_back(*key);
+	}
+}
+
+void Theme::get_constant_type_list(List<StringName> *p_list) const {
+	ERR_FAIL_NULL(p_list);
+
+	const StringName *key = nullptr;
+	while ((key = constant_map.next(key))) {
 		p_list->push_back(*key);
 	}
 }
@@ -739,7 +835,7 @@ void Theme::clear() {
 	color_map.clear();
 	constant_map.clear();
 
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -791,7 +887,7 @@ void Theme::copy_theme(const Ref<Theme> &p_other) {
 	color_map = p_other->color_map;
 	constant_map = p_other->constant_map;
 
-	_change_notify();
+	notify_property_list_changed();
 	emit_changed();
 }
 
@@ -834,25 +930,30 @@ void Theme::get_type_list(List<StringName> *p_list) const {
 	}
 }
 
+void Theme::reset_state() {
+	clear();
+}
 void Theme::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_icon", "name", "node_type", "texture"), &Theme::set_icon);
 	ClassDB::bind_method(D_METHOD("get_icon", "name", "node_type"), &Theme::get_icon);
 	ClassDB::bind_method(D_METHOD("has_icon", "name", "node_type"), &Theme::has_icon);
 	ClassDB::bind_method(D_METHOD("clear_icon", "name", "node_type"), &Theme::clear_icon);
 	ClassDB::bind_method(D_METHOD("get_icon_list", "node_type"), &Theme::_get_icon_list);
+	ClassDB::bind_method(D_METHOD("get_icon_type_list"), &Theme::_get_icon_type_list);
 
 	ClassDB::bind_method(D_METHOD("set_stylebox", "name", "node_type", "texture"), &Theme::set_stylebox);
 	ClassDB::bind_method(D_METHOD("get_stylebox", "name", "node_type"), &Theme::get_stylebox);
 	ClassDB::bind_method(D_METHOD("has_stylebox", "name", "node_type"), &Theme::has_stylebox);
 	ClassDB::bind_method(D_METHOD("clear_stylebox", "name", "node_type"), &Theme::clear_stylebox);
 	ClassDB::bind_method(D_METHOD("get_stylebox_list", "node_type"), &Theme::_get_stylebox_list);
-	ClassDB::bind_method(D_METHOD("get_stylebox_types"), &Theme::_get_stylebox_types);
+	ClassDB::bind_method(D_METHOD("get_stylebox_type_list"), &Theme::_get_stylebox_type_list);
 
 	ClassDB::bind_method(D_METHOD("set_font", "name", "node_type", "font"), &Theme::set_font);
 	ClassDB::bind_method(D_METHOD("get_font", "name", "node_type"), &Theme::get_font);
 	ClassDB::bind_method(D_METHOD("has_font", "name", "node_type"), &Theme::has_font);
 	ClassDB::bind_method(D_METHOD("clear_font", "name", "node_type"), &Theme::clear_font);
 	ClassDB::bind_method(D_METHOD("get_font_list", "node_type"), &Theme::_get_font_list);
+	ClassDB::bind_method(D_METHOD("get_font_type_list"), &Theme::_get_font_type_list);
 
 	ClassDB::bind_method(D_METHOD("set_font_size", "name", "node_type", "font_size"), &Theme::set_font_size);
 	ClassDB::bind_method(D_METHOD("get_font_size", "name", "node_type"), &Theme::get_font_size);
@@ -865,12 +966,14 @@ void Theme::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("has_color", "name", "node_type"), &Theme::has_color);
 	ClassDB::bind_method(D_METHOD("clear_color", "name", "node_type"), &Theme::clear_color);
 	ClassDB::bind_method(D_METHOD("get_color_list", "node_type"), &Theme::_get_color_list);
+	ClassDB::bind_method(D_METHOD("get_color_type_list"), &Theme::_get_color_type_list);
 
 	ClassDB::bind_method(D_METHOD("set_constant", "name", "node_type", "constant"), &Theme::set_constant);
 	ClassDB::bind_method(D_METHOD("get_constant", "name", "node_type"), &Theme::get_constant);
 	ClassDB::bind_method(D_METHOD("has_constant", "name", "node_type"), &Theme::has_constant);
 	ClassDB::bind_method(D_METHOD("clear_constant", "name", "node_type"), &Theme::clear_constant);
 	ClassDB::bind_method(D_METHOD("get_constant_list", "node_type"), &Theme::_get_constant_list);
+	ClassDB::bind_method(D_METHOD("get_constant_type_list"), &Theme::_get_constant_type_list);
 
 	ClassDB::bind_method(D_METHOD("clear"), &Theme::clear);
 
@@ -880,7 +983,7 @@ void Theme::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_default_font_size", "font_size"), &Theme::set_default_theme_font_size);
 	ClassDB::bind_method(D_METHOD("get_default_font_size"), &Theme::get_default_theme_font_size);
 
-	ClassDB::bind_method(D_METHOD("get_type_list", "node_type"), &Theme::_get_type_list);
+	ClassDB::bind_method(D_METHOD("get_type_list"), &Theme::_get_type_list);
 
 	ClassDB::bind_method("copy_default_theme", &Theme::copy_default_theme);
 	ClassDB::bind_method(D_METHOD("copy_theme", "other"), &Theme::copy_theme);

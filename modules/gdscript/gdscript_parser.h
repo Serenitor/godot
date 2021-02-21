@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -43,7 +43,6 @@
 #include "core/templates/vector.h"
 #include "core/variant/variant.h"
 #include "gdscript_cache.h"
-#include "gdscript_functions.h"
 #include "gdscript_tokenizer.h"
 
 #ifdef DEBUG_ENABLED
@@ -287,7 +286,7 @@ public:
 
 	struct AssertNode : public Node {
 		ExpressionNode *condition = nullptr;
-		LiteralNode *message = nullptr;
+		ExpressionNode *message = nullptr;
 
 		AssertNode() {
 			type = ASSERT;
@@ -352,7 +351,7 @@ public:
 			OP_COMP_GREATER_EQUAL,
 		};
 
-		OpType operation;
+		OpType operation = OpType::OP_ADDITION;
 		Variant::Operator variant_op = Variant::OP_MAX;
 		ExpressionNode *left_operand = nullptr;
 		ExpressionNode *right_operand = nullptr;
@@ -754,7 +753,7 @@ public:
 
 	struct MatchBranchNode : public Node {
 		Vector<PatternNode *> patterns;
-		SuiteNode *block;
+		SuiteNode *block = nullptr;
 		bool has_wildcard = false;
 
 		MatchBranchNode() {
@@ -1002,7 +1001,7 @@ public:
 			OP_LOGIC_NOT,
 		};
 
-		OpType operation;
+		OpType operation = OP_POSITIVE;
 		Variant::Operator variant_op = Variant::OP_MAX;
 		ExpressionNode *operand = nullptr;
 
@@ -1173,8 +1172,7 @@ private:
 		PREC_BIT_XOR,
 		PREC_BIT_AND,
 		PREC_BIT_SHIFT,
-		PREC_SUBTRACTION,
-		PREC_ADDITION,
+		PREC_ADDITION_SUBTRACTION,
 		PREC_FACTOR,
 		PREC_SIGN,
 		PREC_BIT_NOT,
@@ -1314,7 +1312,6 @@ public:
 	ClassNode *get_tree() const { return head; }
 	bool is_tool() const { return _is_tool; }
 	static Variant::Type get_builtin_type(const StringName &p_type);
-	static GDScriptFunctions::Function get_builtin_function(const StringName &p_name);
 
 	CompletionContext get_completion_context() const { return completion_context; }
 	CompletionCall get_completion_call() const { return completion_call; }

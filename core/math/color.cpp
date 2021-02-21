@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -355,6 +355,23 @@ bool Color::html_is_valid(const String &p_color) {
 }
 
 Color Color::named(const String &p_name) {
+	int idx = find_named_color(p_name);
+	if (idx == -1) {
+		ERR_FAIL_V_MSG(Color(), "Invalid color name: " + p_name + ".");
+		return Color();
+	}
+	return get_named_color(idx);
+}
+
+Color Color::named(const String &p_name, const Color &p_default) {
+	int idx = find_named_color(p_name);
+	if (idx == -1) {
+		return p_default;
+	}
+	return get_named_color(idx);
+}
+
+int Color::find_named_color(const String &p_name) {
 	String name = p_name;
 	// Normalize name
 	name = name.replace(" ", "");
@@ -367,14 +384,12 @@ Color Color::named(const String &p_name) {
 	int idx = 0;
 	while (named_colors[idx].name != nullptr) {
 		if (name == named_colors[idx].name) {
-			return named_colors[idx].color;
+			return idx;
 		}
 		idx++;
 	}
 
-	ERR_FAIL_V_MSG(Color(), "Invalid color name: " + p_name + ".");
-
-	return Color();
+	return -1;
 }
 
 int Color::get_named_color_count() {
@@ -384,11 +399,23 @@ int Color::get_named_color_count() {
 	}
 	return idx;
 }
+
 String Color::get_named_color_name(int p_idx) {
 	return named_colors[p_idx].name;
 }
+
 Color Color::get_named_color(int p_idx) {
 	return named_colors[p_idx].color;
+}
+
+// For a version that errors on invalid values instead of returning
+// a default color, use the Color(String) constructor instead.
+Color Color::from_string(const String &p_string, const Color &p_default) {
+	if (html_is_valid(p_string)) {
+		return html(p_string);
+	} else {
+		return named(p_string, p_default);
+	}
 }
 
 String _to_hex(float p_val) {
@@ -519,12 +546,12 @@ Color Color::operator*(const Color &p_color) const {
 			a * p_color.a);
 }
 
-Color Color::operator*(real_t p_rvalue) const {
+Color Color::operator*(float p_scalar) const {
 	return Color(
-			r * p_rvalue,
-			g * p_rvalue,
-			b * p_rvalue,
-			a * p_rvalue);
+			r * p_scalar,
+			g * p_scalar,
+			b * p_scalar,
+			a * p_scalar);
 }
 
 void Color::operator*=(const Color &p_color) {
@@ -534,11 +561,11 @@ void Color::operator*=(const Color &p_color) {
 	a = a * p_color.a;
 }
 
-void Color::operator*=(real_t p_rvalue) {
-	r = r * p_rvalue;
-	g = g * p_rvalue;
-	b = b * p_rvalue;
-	a = a * p_rvalue;
+void Color::operator*=(float p_scalar) {
+	r = r * p_scalar;
+	g = g * p_scalar;
+	b = b * p_scalar;
+	a = a * p_scalar;
 }
 
 Color Color::operator/(const Color &p_color) const {
@@ -549,12 +576,12 @@ Color Color::operator/(const Color &p_color) const {
 			a / p_color.a);
 }
 
-Color Color::operator/(real_t p_rvalue) const {
+Color Color::operator/(float p_scalar) const {
 	return Color(
-			r / p_rvalue,
-			g / p_rvalue,
-			b / p_rvalue,
-			a / p_rvalue);
+			r / p_scalar,
+			g / p_scalar,
+			b / p_scalar,
+			a / p_scalar);
 }
 
 void Color::operator/=(const Color &p_color) {
@@ -564,18 +591,11 @@ void Color::operator/=(const Color &p_color) {
 	a = a / p_color.a;
 }
 
-void Color::operator/=(real_t p_rvalue) {
-	if (p_rvalue == 0) {
-		r = 1.0;
-		g = 1.0;
-		b = 1.0;
-		a = 1.0;
-	} else {
-		r = r / p_rvalue;
-		g = g / p_rvalue;
-		b = b / p_rvalue;
-		a = a / p_rvalue;
-	}
+void Color::operator/=(float p_scalar) {
+	r = r / p_scalar;
+	g = g / p_scalar;
+	b = b / p_scalar;
+	a = a / p_scalar;
 }
 
 Color Color::operator-() const {

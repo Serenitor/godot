@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -595,7 +595,7 @@ void EditorFileSystem::scan() {
 		return;
 	}
 
-	if (scanning || scanning_changes || thread) {
+	if (scanning || scanning_changes || thread.is_started()) {
 		return;
 	}
 
@@ -619,13 +619,13 @@ void EditorFileSystem::scan() {
 		_queue_update_script_classes();
 		first_scan = false;
 	} else {
-		ERR_FAIL_COND(thread);
+		ERR_FAIL_COND(thread.is_started());
 		set_process(true);
 		Thread::Settings s;
 		scanning = true;
 		scan_total = 0;
 		s.priority = Thread::PRIORITY_LOW;
-		thread = Thread::create(_thread_func, this, s);
+		thread.start(_thread_func, this, s);
 		//tree->hide();
 		//progress->show();
 	}
@@ -1046,7 +1046,7 @@ void EditorFileSystem::_thread_func_sources(void *_userdata) {
 
 void EditorFileSystem::scan_changes() {
 	if (first_scan || // Prevent a premature changes scan from inhibiting the first full scan
-			scanning || scanning_changes || thread) {
+			scanning || scanning_changes || thread.is_started()) {
 		scan_changes_pending = true;
 		set_process(true);
 		return;
@@ -1076,12 +1076,12 @@ void EditorFileSystem::scan_changes() {
 		scanning_changes_done = true;
 		emit_signal("sources_changed", sources_changed.size() > 0);
 	} else {
-		ERR_FAIL_COND(thread_sources);
+		ERR_FAIL_COND(thread_sources.is_started());
 		set_process(true);
 		scan_total = 0;
 		Thread::Settings s;
 		s.priority = Thread::PRIORITY_LOW;
-		thread_sources = Thread::create(_thread_func_sources, this, s);
+		thread_sources.start(_thread_func_sources, this, s);
 	}
 }
 
@@ -1092,17 +1092,14 @@ void EditorFileSystem::_notification(int p_what) {
 
 		} break;
 		case NOTIFICATION_EXIT_TREE: {
-			Thread *active_thread = thread ? thread : thread_sources;
-			if (use_threads && active_thread) {
+			Thread &active_thread = thread.is_started() ? thread : thread_sources;
+			if (use_threads && active_thread.is_started()) {
 				//abort thread if in progress
 				abort_scan = true;
 				while (scanning) {
 					OS::get_singleton()->delay_usec(1000);
 				}
-				Thread::wait_to_finish(active_thread);
-				memdelete(active_thread);
-				thread = nullptr;
-				thread_sources = nullptr;
+				active_thread.wait_to_finish();
 				WARN_PRINT("Scan thread aborted...");
 				set_process(false);
 			}
@@ -1125,9 +1122,7 @@ void EditorFileSystem::_notification(int p_what) {
 
 						set_process(false);
 
-						Thread::wait_to_finish(thread_sources);
-						memdelete(thread_sources);
-						thread_sources = nullptr;
+						thread_sources.wait_to_finish();
 						if (_update_scan_actions()) {
 							emit_signal("filesystem_changed");
 						}
@@ -1135,7 +1130,7 @@ void EditorFileSystem::_notification(int p_what) {
 						_queue_update_script_classes();
 						first_scan = false;
 					}
-				} else if (!scanning && thread) {
+				} else if (!scanning && thread.is_started()) {
 					set_process(false);
 
 					if (filesystem) {
@@ -1143,9 +1138,7 @@ void EditorFileSystem::_notification(int p_what) {
 					}
 					filesystem = new_filesystem;
 					new_filesystem = nullptr;
-					Thread::wait_to_finish(thread);
-					memdelete(thread);
-					thread = nullptr;
+					thread.wait_to_finish();
 					_update_scan_actions();
 					emit_signal("filesystem_changed");
 					emit_signal("sources_changed", sources_changed.size() > 0);
@@ -1420,11 +1413,11 @@ void EditorFileSystem::_scan_script_classes(EditorFileSystemDirectory *p_dir) {
 }
 
 void EditorFileSystem::update_script_classes() {
-	if (!update_script_classes_queued) {
+	if (!update_script_classes_queued.is_set()) {
 		return;
 	}
 
-	update_script_classes_queued = false;
+	update_script_classes_queued.clear();
 	ScriptServer::global_classes_clear();
 	if (get_filesystem()) {
 		_scan_script_classes(get_filesystem());
@@ -1443,11 +1436,11 @@ void EditorFileSystem::update_script_classes() {
 }
 
 void EditorFileSystem::_queue_update_script_classes() {
-	if (update_script_classes_queued) {
+	if (update_script_classes_queued.is_set()) {
 		return;
 	}
 
-	update_script_classes_queued = true;
+	update_script_classes_queued.set();
 	call_deferred("update_script_classes");
 }
 
@@ -1477,20 +1470,21 @@ void EditorFileSystem::update_file(const String &p_file) {
 	String type = ResourceLoader::get_resource_type(p_file);
 
 	if (cpos == -1) {
-		//the file did not exist, it was added
+		// The file did not exist, it was added.
 
-		late_added_files.insert(p_file); //remember that it was added. This mean it will be scanned and imported on editor restart
+		late_added_files.insert(p_file); // Remember that it was added. This mean it will be scanned and imported on editor restart.
 		int idx = 0;
+		String file_name = p_file.get_file();
 
 		for (int i = 0; i < fs->files.size(); i++) {
-			if (p_file < fs->files[i]->file) {
+			if (file_name < fs->files[i]->file) {
 				break;
 			}
 			idx++;
 		}
 
 		EditorFileSystemDirectory::FileInfo *fi = memnew(EditorFileSystemDirectory::FileInfo);
-		fi->file = p_file.get_file();
+		fi->file = file_name;
 		fi->import_modified_time = 0;
 		fi->import_valid = ResourceLoader::is_import_valid(p_file);
 
@@ -1586,7 +1580,7 @@ Error EditorFileSystem::_reimport_group(const String &p_group_file, const Vector
 		f->store_line("importer=\"" + importer->get_importer_name() + "\"");
 		int version = importer->get_format_version();
 		if (version > 0) {
-			f->store_line("importer_version=" + itos(importer->get_format_version()));
+			f->store_line("importer_version=" + itos(version));
 		}
 		if (importer->get_resource_type() != "") {
 			f->store_line("type=\"" + importer->get_resource_type() + "\"");
@@ -1725,7 +1719,7 @@ void EditorFileSystem::_reimport_file(const String &p_file) {
 		importer = ResourceFormatImporter::get_singleton()->get_importer_by_extension(p_file.get_extension());
 		load_default = true;
 		if (importer.is_null()) {
-			ERR_PRINT("BUG: File queued for import, but can't be imported!");
+			ERR_PRINT("BUG: File queued for import, but can't be imported, importer for type '" + importer_name + "' not found.");
 			ERR_FAIL();
 		}
 	}
@@ -1772,6 +1766,10 @@ void EditorFileSystem::_reimport_file(const String &p_file) {
 	f->store_line("[remap]");
 	f->store_line("");
 	f->store_line("importer=\"" + importer->get_importer_name() + "\"");
+	int version = importer->get_format_version();
+	if (version > 0) {
+		f->store_line("importer_version=" + itos(version));
+	}
 	if (importer->get_resource_type() != "") {
 		f->store_line("type=\"" + importer->get_resource_type() + "\"");
 	}
@@ -2069,17 +2067,15 @@ void EditorFileSystem::_update_extensions() {
 
 EditorFileSystem::EditorFileSystem() {
 	ResourceLoader::import = _resource_import;
-	reimport_on_missing_imported_files = GLOBAL_DEF("editor/reimport_missing_imported_files", true);
+	reimport_on_missing_imported_files = GLOBAL_DEF("editor/import/reimport_missing_imported_files", true);
 
 	singleton = this;
 	filesystem = memnew(EditorFileSystemDirectory); //like, empty
 	filesystem->parent = nullptr;
 
-	thread = nullptr;
 	scanning = false;
 	importing = false;
 	use_threads = true;
-	thread_sources = nullptr;
 	new_filesystem = nullptr;
 
 	abort_scan = false;
@@ -2095,7 +2091,7 @@ EditorFileSystem::EditorFileSystem() {
 	memdelete(da);
 
 	scan_total = 0;
-	update_script_classes_queued = false;
+	update_script_classes_queued.clear();
 	first_scan = true;
 	scan_changes_pending = false;
 	revalidate_import_files = false;

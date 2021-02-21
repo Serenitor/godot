@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -87,7 +87,7 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_initialize(JNIEnv *en
 	godot_java = new GodotJavaWrapper(env, activity, godot_instance);
 	godot_io_java = new GodotIOJavaWrapper(env, godot_java->get_member_object("io", "Lorg/godotengine/godot/GodotIO;", env));
 
-	ThreadAndroid::make_default(jvm);
+	init_thread_jandroid(jvm, env);
 
 	jobject amgr = env->NewGlobalRef(p_asset_manager);
 
@@ -119,7 +119,7 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_ondestroy(JNIEnv *env
 }
 
 JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_setup(JNIEnv *env, jclass clazz, jobjectArray p_cmdline) {
-	ThreadAndroid::setup_thread();
+	setup_android_thread();
 
 	const char **cmdline = nullptr;
 	jstring *j_cmdline = nullptr;
@@ -206,7 +206,7 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_step(JNIEnv *env, jcl
 		return;
 
 	if (step == 0) {
-		// Since Godot is initialized on the UI thread, _main_thread_id was set to that thread's id,
+		// Since Godot is initialized on the UI thread, main_thread_id was set to that thread's id,
 		// but for Godot purposes, the main thread is the one running the game loop
 		Main::setup2(Thread::get_caller_id());
 		++step;
@@ -382,7 +382,7 @@ JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_focusout(JNIEnv *env,
 }
 
 JNIEXPORT void JNICALL Java_org_godotengine_godot_GodotLib_audio(JNIEnv *env, jclass clazz) {
-	ThreadAndroid::setup_thread();
+	setup_android_thread();
 	AudioDriverAndroid::thread_func(env);
 }
 

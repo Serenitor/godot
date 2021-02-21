@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
+/* Copyright (c) 2007-2021 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2021 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -72,10 +72,20 @@ public:
 	virtual float font_get_underline_position(RID p_font, int p_size) const override;
 	virtual float font_get_underline_thickness(RID p_font, int p_size) const override;
 
+	virtual int font_get_spacing_space(RID p_font) const override;
+	virtual void font_set_spacing_space(RID p_font, int p_value) override;
+
+	virtual int font_get_spacing_glyph(RID p_font) const override;
+	virtual void font_set_spacing_glyph(RID p_font, int p_value) override;
+
 	virtual void font_set_antialiased(RID p_font, bool p_antialiased) override;
 	virtual bool font_get_antialiased(RID p_font) const override;
 
 	virtual Dictionary font_get_feature_list(RID p_font) const override;
+	virtual Dictionary font_get_variation_list(RID p_font) const override;
+
+	virtual void font_set_variation(RID p_font, const String &p_name, double p_value) override;
+	virtual double font_get_variation(RID p_font, const String &p_name) const override;
 
 	virtual void font_set_hinting(RID p_font, Hinting p_hinting) override;
 	virtual Hinting font_get_hinting(RID p_font) const override;

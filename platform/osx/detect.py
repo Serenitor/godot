@@ -12,7 +12,6 @@ def get_name():
 
 
 def can_build():
-
     if sys.platform == "darwin" or ("OSXCROSS_ROOT" in os.environ):
         return True
 
@@ -31,7 +30,8 @@ def get_opts():
             " validation layers)",
             False,
         ),
-        EnumVariable("debug_symbols", "Add debugging symbols to release/release_debug builds", "yes", ("yes", "no")),
+        EnumVariable("macports_clang", "Build using Clang from MacPorts", "no", ("no", "5.0", "devel")),
+        BoolVariable("debug_symbols", "Add debugging symbols to release/release_debug builds", True),
         BoolVariable("separate_debug_symbols", "Create a separate file containing debugging symbols", False),
         BoolVariable("use_ubsan", "Use LLVM/GCC compiler undefined behavior sanitizer (UBSAN)", False),
         BoolVariable("use_asan", "Use LLVM/GCC compiler address sanitizer (ASAN))", False),
@@ -40,12 +40,10 @@ def get_opts():
 
 
 def get_flags():
-
     return []
 
 
 def configure(env):
-
     ## Build type
 
     if env["target"] == "release":
@@ -56,7 +54,7 @@ def configure(env):
         if env["arch"] != "arm64":
             env.Prepend(CCFLAGS=["-msse2"])
 
-        if env["debug_symbols"] == "yes":
+        if env["debug_symbols"]:
             env.Prepend(CCFLAGS=["-g2"])
 
     elif env["target"] == "release_debug":
@@ -65,7 +63,7 @@ def configure(env):
         else:  # optimize for size
             env.Prepend(CCFLAGS=["-Os"])
         env.Prepend(CPPDEFINES=["DEBUG_ENABLED"])
-        if env["debug_symbols"] == "yes":
+        if env["debug_symbols"]:
             env.Prepend(CCFLAGS=["-g2"])
 
     elif env["target"] == "debug":
